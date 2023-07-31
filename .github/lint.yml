@@ -1,0 +1,26 @@
+name: Python Lint
+
+on:
+  push:
+    branches:
+      - main  # Adjust the branch name to match your default branch if it's not 'main'
+      - feat/github-actions
+
+jobs:
+  lint:
+    name: Lint Python Code
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.9'  # Replace '3.x' with the Python version you need, e.g., '3.7'
+
+    - name: Install dependencies
+      run: pip install flake8
+
+    - name: Run Flake8
+      run: flake8  # Add additional options here if needed
