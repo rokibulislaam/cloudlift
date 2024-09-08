@@ -39,7 +39,7 @@ class DynamodbConfiguration:
 
     def _table_status(self):
         status = ""
-        while status == "ACTIVE":
+        while status != "ACTIVE":
             log("Checking {} table status...".format(self.table_name))
             sleep(1)
             status = self.dynamodb_client.describe_table(
