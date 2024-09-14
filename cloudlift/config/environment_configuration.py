@@ -201,6 +201,8 @@ class EnvironmentConfiguration(object):
             },
             "service_defaults": {
                 "logging": "awslogs",
+                "alb_mode": "dedicated",
+                "disable_service_alarms": False,
                 "fluentbit_config": {
                 "image_uri": "amazon/aws-for-fluent-bit:stable",
                 "env": {
@@ -214,7 +216,6 @@ class EnvironmentConfiguration(object):
             if spot_allocation_strategy == 'lowest-price':
                 environment_configuration[self.environment]['vpc']['cluster']['spot_instance_pools'] = spot_instance_pools
         self._set_config(environment_configuration)
-        pass
 
     def _edit_config(self):
         '''
@@ -425,6 +426,13 @@ class EnvironmentConfiguration(object):
                             "type": "object",
                             "properties": {
                                 "logging": logging_json_schema,
+                                "alb_mode": {
+                                    "type": "string",
+                                    "pattern": "^(cluster|dedicated)$"
+                                },
+                                "disable_service_alarms": {
+                                    "type": "boolean"
+                                },
                                 "fluentbit_config": {
                                     "type": "object",
                                     "properties": {

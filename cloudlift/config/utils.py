@@ -61,7 +61,8 @@ class ConfigUtils:
         config_to_validate = copy.deepcopy(configuration)
         if self.inject_version:
             config_to_validate['cloudlift_version'] = VERSION
-        self.changes_validation_function(config_to_validate)
+        if self.changes_validation_function:  
+            self.changes_validation_function(config_to_validate)
         
 
     def _get_temp_config_file_name(self):
@@ -87,11 +88,8 @@ class ConfigUtils:
                         )
                     )
 
-        edit_status = edit(filename=temp_file)
+        edit(filename=temp_file)
 
-        if edit_status and edit_status != 0:
-            log_err("Error occurred while editing the configuration. Changes aborted.")
-            return
 
         tmp_file_content = open(temp_file, "r").read()
 
