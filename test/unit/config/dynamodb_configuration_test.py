@@ -7,13 +7,13 @@ from cloudlift.config.dynamodb_configuration import DynamodbConfiguration
 
 
 @pytest.fixture
-def dynamodb_config(mocked_boto):
+def dynamodb_config(mock_aws):
     table_name = "test_table"
     kv_pairs = [("id", "value"), ("key", "attribute")]
     return DynamodbConfiguration(table_name, kv_pairs)
 
 
-def test_get_table_creates_table_when_not_exists(dynamodb_config, mocked_boto, capsys):
+def test_get_table_creates_table_when_not_exists(dynamodb_config, mock_aws, capsys):
     """
     Tests that the _get_table method creates a table when it does not exist
     """
@@ -40,7 +40,7 @@ def test_get_table_creates_table_when_not_exists(dynamodb_config, mocked_boto, c
     assert table.table_name == dynamodb_config.table_name
 
 
-def test_get_table_returns_existing_table(dynamodb_config, mocked_boto, capsys):
+def test_get_table_returns_existing_table(dynamodb_config, mock_aws, capsys):
     """
     Tests that the _get_table method returns an existing table without creating a new one
     """
@@ -68,7 +68,7 @@ def test_get_table_returns_existing_table(dynamodb_config, mocked_boto, capsys):
 
 
 def test_create_configuration_table_creates_correct_schema(
-    dynamodb_config, mocked_boto, capsys
+    dynamodb_config, mock_aws, capsys
 ):
     """
     Tests that the _create_configuration_table method creates a table with the expected schema
@@ -96,7 +96,7 @@ def test_create_configuration_table_creates_correct_schema(
 
 
 def test_table_status_waits_until_active(
-    dynamodb_config, mocked_boto, monkeypatch, capsys
+    dynamodb_config, mock_aws, monkeypatch, capsys
 ):
     """
     Tests that the _table_status method waits until the table status is ACTIVE

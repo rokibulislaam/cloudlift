@@ -7,7 +7,7 @@ from cloudlift.exceptions import UnrecoverableException
 
 
 @pytest.fixture(autouse=True)
-def patch_get_client_for(monkeypatch, mocked_boto):
+def patch_get_client_for(monkeypatch, mock_aws):
     def get_client_for(resource, _environment):
         return boto3.session.Session().client(resource)
 
@@ -17,14 +17,14 @@ def patch_get_client_for(monkeypatch, mocked_boto):
 
 
 @pytest.fixture
-def ssm_client(mocked_boto):
+def ssm_client(mock_aws):
     """Fixture for setting up and tearing down a mocked SSM client."""
     client = boto3.client("ssm")
     yield client
 
 
 @pytest.fixture
-def parameter_store(mocked_boto):
+def parameter_store(mock_aws):
     """Fixture for creating a ParameterStore instance."""
     return ParameterStore(service_name="test-service", environment="test-env")
 

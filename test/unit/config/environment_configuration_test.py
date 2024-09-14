@@ -13,7 +13,7 @@ ENVIRONMENT_NAME = "test-environment"
 
 
 @pytest.fixture(scope="module")
-def environment_config_table(mocked_boto_module_scopped):
+def environment_config_table(mock_aws_module_scoped):
     """
     A module scoped fixture & DynamodbConfiguration mock, ensures the table is not created multiple
     times
@@ -25,7 +25,7 @@ def environment_config_table(mocked_boto_module_scopped):
 
 
 @pytest.fixture(scope="function")
-def environment_config_table_mock(mocked_boto, environment_config_table):
+def environment_config_table_mock(mock_aws, environment_config_table):
     """
     A function scoped fixture, mocks the DynamodbConfiguration class and returns the table object.
     MagicMock wraps the actual table object, helps in asserting the calls made to the table
@@ -35,7 +35,7 @@ def environment_config_table_mock(mocked_boto, environment_config_table):
 
 
 def test_get_config_when_config_doesnt_exist(
-    mocked_boto, environment_config_table_mock
+    mock_aws, environment_config_table_mock
 ):
     """
     Tests that get_config raises an exception when the configuration doesn't exist.
@@ -51,7 +51,7 @@ def test_get_config_when_config_doesnt_exist(
 
 
 def test_get_config_raise_exception_when_env_doesnt_exist(
-    mocked_boto, environment_config_table_mock
+    mock_aws, environment_config_table_mock
 ):
     """
     Tests that get_config raises an exception when the environment doesn't exist.
@@ -63,7 +63,7 @@ def test_get_config_raise_exception_when_env_doesnt_exist(
     assert "Environment configuration not found" in str(exc_info.value)
 
 
-def test_get_config_when_config_exists(mocked_boto, environment_config_table_mock):
+def test_get_config_when_config_exists(mock_aws, environment_config_table_mock):
     """
     Tests that get_config returns the configuration when it exists. Also tests that
     cloudlift_version is not present in the returned configuration.
@@ -85,7 +85,7 @@ def test_get_config_when_config_exists(mocked_boto, environment_config_table_moc
 
 
 def test_get_config_when_config_exists_and_loose_version_check_fails(
-    mocked_boto, environment_config_table_mock
+    mock_aws, environment_config_table_mock
 ):
     """
     Tests that get_config raises an exception when the configuration exists but the version check
@@ -119,7 +119,7 @@ def test_get_config_when_config_exists_and_loose_version_check_fails(
     assert error_message in str(exception_info.value)
 
 
-def test_update_config(mocked_boto, environment_config_table_mock):
+def test_update_config(mock_aws, environment_config_table_mock):
     """
     Tests that _create_config is called when the configuration doesn't exist and _edit_config is
     called after that.
@@ -153,7 +153,7 @@ def test_update_config(mocked_boto, environment_config_table_mock):
     env_config._edit_config.assert_called_once()
 
 
-def test_get_all_environments(mocked_boto, environment_config_table_mock):
+def test_get_all_environments(mock_aws, environment_config_table_mock):
     """
     Tests that get_all_environments returns a list of all the environments.
     """
@@ -168,7 +168,7 @@ def test_get_all_environments(mocked_boto, environment_config_table_mock):
 
 
 def test_edit_config_no_changes(
-    mocked_boto, environment_config_table_mock, monkeypatch
+    mock_aws, environment_config_table_mock, monkeypatch
 ):
     """
     Tests that _edit_config does not update the configuration if no changes are made.
@@ -199,7 +199,7 @@ def test_edit_config_no_changes(
     env_config._set_config.assert_called_once_with(sample_config)
 
 
-def tet_env_config_exists(mocked_boto, environment_config_table_mock):
+def tet_env_config_exists(mock_aws, environment_config_table_mock):
     """
     Tests that _env_config_exists returns True if the configuration exists and False otherwise.
     """
@@ -321,7 +321,7 @@ def test_create_config_prompts_for_values(monkeypatch, create_config_prompt_valu
 
 
 def test_edit_config_with_changes(
-    mocked_boto, environment_config_table_mock, monkeypatch
+    mock_aws, environment_config_table_mock, monkeypatch
 ):
     """
     Tests that _edit_config updates the configuration if changes are made.
@@ -360,7 +360,7 @@ def test_edit_config_with_changes(
 
 
 def test_edit_config_aborts_changes(
-    mocked_boto, environment_config_table_mock, monkeypatch
+    mock_aws, environment_config_table_mock, monkeypatch
 ):
     """
     Tests that _edit_config does not update the configuration if changes are aborted.
@@ -399,7 +399,7 @@ def test_edit_config_aborts_changes(
 
 
 def test_edit_config_no_changes(
-    mocked_boto, environment_config_table_mock, monkeypatch
+    mock_aws, environment_config_table_mock, monkeypatch
 ):
     """
     Tests that _edit_config does not update the configuration if no changes are made.
@@ -444,7 +444,7 @@ def click_confirm_mock(monkeypatch):
 
 
 def test_set_config_valid_configuration(
-    mocked_boto, environment_config_table_mock, monkeypatch, click_confirm_mock
+    mock_aws, environment_config_table_mock, monkeypatch, click_confirm_mock
 ):
     """
     Tests that _set_config successfully updates the configuration in DynamoDB when the configuration
@@ -523,7 +523,7 @@ def test_set_config_valid_configuration(
 
 
 def test_set_config_invalid_configuration(
-    mocked_boto, environment_config_table_mock, monkeypatch
+    mock_aws, environment_config_table_mock, monkeypatch
 ):
     """
     Tests that _set_config raises an UnrecoverableException when the configuration is invalid.
@@ -550,7 +550,7 @@ def test_set_config_invalid_configuration(
 
 
 def test_set_config_sns_topic_does_not_exist(
-    mocked_boto, environment_config_table_mock, monkeypatch
+    mock_aws, environment_config_table_mock, monkeypatch
 ):
     """
     Tests that _set_config raises an UnrecoverableException when the SNS topic does not exist.
@@ -580,7 +580,7 @@ def test_set_config_sns_topic_does_not_exist(
 
 
 def test_update_cloudlift_version(
-    mocked_boto, environment_config_table_mock, monkeypatch
+    mock_aws, environment_config_table_mock, monkeypatch
 ):
     """
     Tests that update_cloudlift_version updates the cloudlift version in the configuration.

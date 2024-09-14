@@ -15,11 +15,11 @@ from cloudlift.exceptions import UnrecoverableException
 
 
 @pytest.fixture
-def sns_client(mocked_boto):
+def sns_client(mock_aws):
     return boto3.client("sns")
 
 
-def test_check_sns_topic_when_topic_exists(sns_client, mocked_boto):
+def test_check_sns_topic_when_topic_exists(sns_client, mock_aws):
     """
     Tests that check_sns_topic_exists returns True when the SNS topic exists
     """
@@ -28,7 +28,7 @@ def test_check_sns_topic_when_topic_exists(sns_client, mocked_boto):
     assert check_sns_topic_exists(topic_arn, "test-env") == True
 
 
-def test_check_sns_topic_exists_not_found(sns_client, mocked_boto):
+def test_check_sns_topic_exists_not_found(sns_client, mock_aws):
     """
     Tests that check_sns_topic_exists raises an UnrecoverableException when the SNS topic is not found
     """
@@ -42,7 +42,7 @@ def test_check_sns_topic_exists_not_found(sns_client, mocked_boto):
 
 
 @pytest.fixture
-def mock_cloudformation_client(mocked_boto):
+def mock_cloudformation_client(mock_aws):
     cloudformation_client = boto3.client("cloudformation")
     cf_client_mock = MagicMock(wraps=cloudformation_client)
     return cf_client_mock

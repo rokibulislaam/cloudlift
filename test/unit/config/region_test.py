@@ -26,7 +26,7 @@ def patch_get_region_for_environment(monkeypatch):
 
 
 @pytest.fixture
-def environment_configuration(mocked_boto):
+def environment_configuration(mock_aws):
     """Fixture to mock EnvironmentConfiguration."""
     config = {
         "test-env": {

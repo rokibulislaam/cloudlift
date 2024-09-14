@@ -26,7 +26,7 @@ def clear_env_vars():
         os.environ.pop(var, None)
 
 
-def test_do_mfa_login(mocked_boto):
+def test_do_mfa_login(mock_aws):
     """
     Tests that do_mfa_login sets the AWS environment variables correctly.
     """
@@ -46,7 +46,7 @@ def test_do_mfa_login(mocked_boto):
     assert os.environ["AWS_DEFAULT_REGION"] == "ap-south-1"
 
 
-def test_do_mfa_login_without_mfa_code(mocked_boto):
+def test_do_mfa_login_without_mfa_code(mock_aws):
     """
     Tests that do_mfa_login prompts for an MFA code if one is not provided.
     """
@@ -57,7 +57,7 @@ def test_do_mfa_login_without_mfa_code(mocked_boto):
     assert "Credentials" in result
 
 
-def test_get_mfa_session(mocked_boto):
+def test_get_mfa_session(mock_aws):
     """
     Tests that get_mfa_session returns a valid boto3 session.
     """
@@ -73,7 +73,7 @@ def test_get_mfa_session(mocked_boto):
     assert credentials.token == MOTO_DEFAULT_SESSION_TOKEN
 
 
-def test_get_mfa_session_without_mfa_code(mocked_boto):
+def test_get_mfa_session_without_mfa_code(mock_aws):
     """
     Tests that get_mfa_session prompts for an MFA code if one is not provided.
     """
@@ -86,7 +86,7 @@ def test_get_mfa_session_without_mfa_code(mocked_boto):
     assert session.region_name == "ap-south-1"
 
 
-def test_get_username(mocked_boto):
+def test_get_username(mock_aws):
     """
     Tests that get_username returns the correct username.
     """
