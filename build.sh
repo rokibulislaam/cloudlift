@@ -14,9 +14,6 @@ set -o errexit
 WORK_DIR=$(pwd)
 VENV_DIRNAME="venv"
 
-MIN_PYTHON_MINOR_VERSION=9  # 3.9
-MAX_PYTHON_MINOR_VERSION=9  # 3.9
-
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
 
@@ -70,10 +67,6 @@ setup_python() {
   _python_version="$(python3 --version | cut -d' ' -f2)"
   _minor_version="$(echo $_python_version | cut -d'.' -f2)"
 
-  if [ $_minor_version -lt $MIN_PYTHON_MINOR_VERSION ] || [ $_minor_version -gt $MAX_PYTHON_MINOR_VERSION ]; then
-    print_error "Python version must be >= 3.$MIN_PYTHON_MINOR_VERSION and <= 3.$MAX_PYTHON_MINOR_VERSION"
-  fi
-
   local python_path=$(which python3)
   print_info "Python version: $_python_version ($python_path)"
 }
@@ -109,29 +102,15 @@ build_package() {
   # build the executable
   #  note: --onefile drastically slows down the runtime speed of the executable
 
-  if [ "${OS}" == "linux" ]; then
-    pyinstaller \
-      --onedir \
-      --clean \
-      --nowindow \
-      --name "${OUT_PACKAGE_NAME}" \
-      --paths cloudlift \
-      --add-data LICENSE:. \
-      --add-data README.md:. \
-      --add-binary /usr/lib64/libcrypt.so.1:. \
-      --add-binary /lib/ld-musl-x86_64.so.1:. \
-      bin/cloudlift
-  else
-    pyinstaller \
-      --onedir \
-      --clean \
-      --nowindow \
-      --name "${OUT_PACKAGE_NAME}" \
-      --paths cloudlift \
-      --add-data LICENSE:. \
-      --add-data README.md:. \
-      bin/cloudlift
-  fi
+  pyinstaller \
+    --onedir \
+    --clean \
+    --nowindow \
+    --name "${OUT_PACKAGE_NAME}" \
+    --paths cloudlift \
+    --add-data LICENSE:. \
+    --add-data README.md:. \
+    bin/cloudlift
 
   # change the package name (binary) to the cloudlift package name
   mv "dist/${OUT_PACKAGE_NAME}/${OUT_PACKAGE_NAME}" "dist/${OUT_PACKAGE_NAME}/cloudlift"

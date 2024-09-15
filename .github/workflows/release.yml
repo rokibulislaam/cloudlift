@@ -51,7 +51,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           file: bin/dockerfile-linux
-          tags: centos7-py39
+          tags: pyinstaller-image
           load: true
 
       - name: Create Container
@@ -60,7 +60,7 @@ jobs:
             --name cloudlift-build \
             -v ${{ github.workspace }}:/cloudlift \
             -w /cloudlift \
-            centos7-py39 \
+            pyinstaller-image \
             tail -f /dev/null
 
       - name: Build Package
