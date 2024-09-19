@@ -159,8 +159,7 @@ jobs:
           find ./artifacts -name 'checksums.txt' -exec mv {} $installer_test_artifacts_path \;
           cp -r scripts/* /tmp/installer-test
           cd /tmp/installer-test
-          bash test_installer.sh {{ env.tag }}
-
+          bash test_installer.sh ${{ env.tag }}
 
   release:
     runs-on: ubuntu-latest
@@ -185,7 +184,7 @@ jobs:
         with:
           files: |
             ${{ github.workspace }}/artifacts/**/*.tar.gz
-            ${{ github.workspace }}/artifacts/**/checksums.txt
+            ${{ github.workspace }}/artifacts/checksums/checksums.txt
           tag_name: ${{ env.tag }}
           name: "Release ${{ env.tag }}"
           draft: false
