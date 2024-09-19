@@ -138,18 +138,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: "${{ github.workspace }}/scripts/${{ github.ref }}"
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "${{ env.PYTHON_VERSION }}"
 
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: "${{ github.workspace }}/artifacts"
+
+
       - name: Test Installer
-        run: cd script sh && test_installer.sh
+        run: |
+          mkdir -p /tmp/installer-test
+          find ./artifacts -name '*.tar.gz' -exec mv {} /tmp/installer-test \;
+          find ./artifacts -name 'checksums.txt' -exec mv {} /tmp/installer-test \;
+          cp -r scripts/* /tmp/installer-test
+          cd /tmp/installer-test
+          sh test_installer.sh
 
 
   release:
@@ -175,7 +182,7 @@ jobs:
         with:
           files: |
             ${{ github.workspace }}/artifacts/**/*.tar.gz
-            checksums.txt
+            ${{ github.workspace }}/artifacts/**/checksums.txt
           tag_name: ${{ env.tag }}
           name: "Release ${{ env.tag }}"
           draft: false
