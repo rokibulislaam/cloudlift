@@ -57,23 +57,38 @@ jobs:
       - name: Build Cloudlift Package
         run: python scripts/build.py --os ${{ matrix.build_os }}
 
-      - name: Calculate SHA of Packages
-        run: |
-          find "/tmp" -type f -name "*.tar.gz" | while read -r file; do
-              sha=$(sha256sum "$file" | cut -d' ' -f1)
-              echo "$(basename "$file"): $sha" >> /tmp/checksums.txt
-          done
-
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: "${{ env.package_name }}"
           path: |
             "/tmp/${{ env.package_name }}.tar.gz"
-            "/tmp/checksums.txt"
+  
+  add_checksums:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: "${{ github.workspace }}/artifacts"
+    
+      - name: Generate Checksums
+        run: |
+          find "${{ github.workspace }}/artifacts" -type f -name "*.tar.gz" | while read -r file; do
+              sha=$(sha256sum "$file" | cut -d' ' -f1)
+              echo "$(basename "$file"): $sha" >> ${{ github.workspace }}/checksums.txt
+          done
+      
+      - name: Upload Checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: checksums
+          path: ${{ github.workspace }}/checksums.txt
 
   test:
-    needs: build
+    needs: add_checksums
     strategy:
       matrix:
         include:
@@ -131,7 +146,7 @@ jobs:
         if: steps.scripts_changed.outputs.files_changed == 'true'
         uses: actions/download-artifact@v4
         with:
-          path: "${{ github.workspace }}/artifacts"
+          path: "${{ github.workspace }}/scripts/${{ github.ref }}"
 
       - name: Set up Python
         uses: actions/setup-python@v5

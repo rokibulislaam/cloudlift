@@ -1,0 +1,927 @@
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Cluster Configuration
+        Parameters:
+          - KeyPair
+          - Environment
+          - OnDemandMinSize
+          - OnDemandMaxSize
+          - SpotMinSize
+          - SpotMaxSize
+          - InstanceTypes
+          - VPC
+          - Subnet1
+          - Subnet2
+          - NotificationSnsArn
+    ParameterLabels:
+      Environment:
+        default: Enter the environment e.g. dev or staging or sandbox or production
+      InstanceTypes:
+        default: Type of instance
+      KeyPair:
+        default: Select the key with which you want to login to the ec2 instances
+      SpotMaxSize:
+        default: Max. no. of instances in Spot cluster
+      SpotMinSize:
+        default: Min. no. of instances in Spot cluster
+      OnDemandMinSize:
+        default: Min. no. of instances in On-Demand cluster
+      OnDemandMaxSize:
+        default: Max. no. of instances in On-Demand cluster
+      NotificationSnsArn:
+        default: The SNS topic to which notifications has to be triggered
+      Subnet1:
+        default: Enter the ID of the 1st subnet
+      Subnet2:
+        default: Enter the ID of the 2nd subnet
+      VPC:
+        default: Enter the VPC in which you want the environment to be setup
+Mappings:
+  AWSRegionToAMI:
+    ap-south-1:
+      AMI: ami-062c13e26f1524981
+Outputs:
+  StackId:
+    Description: The unique ID of the stack. To be supplied to circle CI environment
+      variables to validate during deployment.
+    Value: !Ref 'AWS::StackId'
+  StackName:
+    Description: The name of the stack
+    Value: !Ref 'AWS::StackName'
+  CloudliftOptions:
+    Description: Options used with cloudlift when building this cluster
+    Value: '{"env": "production", "min_instances": "20", "max_instances": "60", "spot_min_instances":
+      "1", "spot_max_instances": "1", "instance_types": "m6a.xlarge,c5a.xlarge,c6a.xlarge,m5a.xlarge,r5a.xlarge,r6a.xlarge",
+      "key_name": "production-cluster-v3", "cloudlift_version": "2.0.6"}'
+  VPC:
+    Description: VPC in which environment is setup
+    Value: !Ref 'productionVpc'
+  PrivateSubnet1:
+    Description: ID of the 1st subnet
+    Value: !Ref 'productionPrivateSubnet2'
+  PrivateSubnet2:
+    Description: ID of the 2nd subnet
+    Value: !Ref 'productionPrivateSubnet1'
+  PublicSubnet1:
+    Description: ID of the 1st subnet
+    Value: !Ref 'productionPublicSubnet2'
+  PublicSubnet2:
+    Description: ID of the 2nd subnet
+    Value: !Ref 'productionPublicSubnet1'
+  AutoScalingGroupSpot:
+    Description: Spot AutoScaling group for ECS container instances
+    Value: !Ref 'AutoScalingGroupSpot'
+  AutoScalingGroupOnDemand:
+    Description: On-Demand AutoScaling group for ECS container instances
+    Value: !Ref 'AutoScalingGroupOnDemand'
+  SecurityGroupAlb:
+    Description: Security group ID for ALB
+    Value: !Ref 'SecurityGroupAlb'
+  MinInstances:
+    Description: Minimum on-demand instances in cluster
+    Value: '20'
+  MaxInstances:
+    Description: Maximum on-demand instances in cluster
+    Value: '60'
+  SpotMinInstances:
+    Description: Minimum spot instances in cluster
+    Value: '1'
+  SpotMaxInstances:
+    Description: Maximum spot instances in cluster
+    Value: '1'
+  InstanceTypes:
+    Description: EC2 instance type
+    Value: m6a.xlarge,c5a.xlarge,c6a.xlarge,m5a.xlarge,r5a.xlarge,r6a.xlarge
+  KeyName:
+    Description: Key Pair name for accessing the instances
+    Value: production-cluster-v3
+  CloudmapId:
+    Description: CloudMap Namespace ID for service discovery
+    Export:
+      Name: productionCloudmap
+    Value: !GetAtt 'productionCloudmap.Id'
+  SecurityGroupEC2Host:
+    Export:
+      Name: productionEc2Host
+    Description: EC2Host Security group ID
+    Value: !Ref 'SecurityGroupEc2Hosts'
+  ECSClusterDefaultInstanceLifecycle:
+    Export:
+      Name: productionECSClusterDefaultInstanceLifecycle
+    Description: Default instance type for ECS cluster
+    Value: ondemand
+Parameters:
+  Environment:
+    Description: ''
+    Type: String
+    Default: ''
+  KeyPair:
+    Description: ''
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: ''
+  OnDemandMinSize:
+    Description: ''
+    Type: String
+    Default: '1'
+  OnDemandMaxSize:
+    Description: ''
+    Type: String
+    Default: '60'
+  SpotMinSize:
+    Description: ''
+    Type: String
+    Default: '1'
+  SpotMaxSize:
+    Description: ''
+    Type: String
+    Default: '1'
+  NotificationSnsArn:
+    Description: ''
+    Type: String
+    Default: arn:aws:sns:ap-south-1:725827686899:production
+  InstanceTypes:
+    Description: ''
+    Type: String
+    Default: m6a.xlarge,c5a.xlarge,c6a.xlarge,m5a.xlarge,r5a.xlarge,r6a.xlarge
+Resources:
+  productionVpc:
+    Properties:
+      CidrBlock: 10.50.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+        - Key: category
+          Value: services
+        - Key: environment
+          Value: production
+        - Key: Team
+          Value: production
+        - Key: Name
+          Value: production-vpc
+    Type: AWS::EC2::VPC
+  productionIg:
+    Properties:
+      Tags:
+        - Key: Name
+          Value: production-internet-gateway
+        - Key: environment
+          Value: production
+        - Key: Team
+          Value: production
+    Type: AWS::EC2::InternetGateway
+  productionAttachment:
+    Properties:
+      InternetGatewayId: !Ref 'productionIg'
+      VpcId: !Ref 'productionVpc'
+    Type: AWS::EC2::VPCGatewayAttachment
+  productionPublic:
+    Properties:
+      VpcId: !Ref 'productionVpc'
+      Tags:
+        - Key: Name
+          Value: production-public
+        - Key: environment
+          Value: production
+        - Key: Team
+          Value: production
+    Type: AWS::EC2::RouteTable
+    DependsOn: productionVpc
+  productionPublicSubnet1:
+    Properties:
+      AvailabilityZone: ap-south-1b
+      CidrBlock: 10.50.0.0/22
+      VpcId: !Ref 'productionVpc'
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: production-public-1
+        - Key: environment
+          Value: production
+        - Key: Team
+          Value: production
+    Type: AWS::EC2::Subnet
+  productionPublicSubnet1Assoc:
+    Properties:
+      RouteTableId: !Ref 'productionPublic'
+      SubnetId: !Ref 'productionPublicSubnet1'
+    Type: AWS::EC2::SubnetRouteTableAssociation
+  productionPublicSubnet2:
+    Properties:
+      AvailabilityZone: ap-south-1a
+      CidrBlock: 10.50.8.0/22
+      VpcId: !Ref 'productionVpc'
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: production-public-2
+        - Key: environment
+          Value: production
+        - Key: Team
+          Value: production
+    Type: AWS::EC2::Subnet
+  productionPublicSubnet2Assoc:
+    Properties:
+      RouteTableId: !Ref 'productionPublic'
+      SubnetId: !Ref 'productionPublicSubnet2'
+    Type: AWS::EC2::SubnetRouteTableAssociation
+  productionIgRoute:
+    Properties:
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref 'productionIg'
+      RouteTableId: !Ref 'productionPublic'
+    Type: AWS::EC2::Route
+  productionPrivate:
+    Properties:
+      VpcId: !Ref 'productionVpc'
+      Tags:
+        - Key: Name
+          Value: production-private
+        - Key: environment
+          Value: production
+        - Key: Team
+          Value: production
+    Type: AWS::EC2::RouteTable
+  productionPrivateSubnet1:
+    Properties:
+      AvailabilityZone: ap-south-1b
+      CidrBlock: 10.50.4.0/22
+      VpcId: !Ref 'productionVpc'
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: production-private-1
+        - Key: environment
+          Value: production
+        - Key: Team
+          Value: production
+    Type: AWS::EC2::Subnet
+  productionPrivateSubnet1Assoc:
+    Properties:
+      RouteTableId: !Ref 'productionPrivate'
+      SubnetId: !Ref 'productionPrivateSubnet1'
+    Type: AWS::EC2::SubnetRouteTableAssociation
+  productionPrivateSubnet2:
+    Properties:
+      AvailabilityZone: ap-south-1a
+      CidrBlock: 10.50.12.0/22
+      VpcId: !Ref 'productionVpc'
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: production-private-2
+        - Key: environment
+          Value: production
+        - Key: Team
+          Value: production
+    Type: AWS::EC2::Subnet
+  productionPrivateSubnet2Assoc:
+    Properties:
+      RouteTableId: !Ref 'productionPrivate'
+      SubnetId: !Ref 'productionPrivateSubnet2'
+    Type: AWS::EC2::SubnetRouteTableAssociation
+  productionNat:
+    Properties:
+      AllocationId: eipalloc-05dc5630f1462a3f1
+      SubnetId: !Ref 'productionPublicSubnet1'
+      Tags:
+        - Key: Name
+          Value: production-nat-gateway
+        - Key: environment
+          Value: production
+        - Key: Team
+          Value: production
+    Type: AWS::EC2::NatGateway
+  productionNatRoute:
+    Properties:
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref 'productionNat'
+      RouteTableId: !Ref 'productionPrivate'
+    Type: AWS::EC2::Route
+  DBSubnetGroup:
+    Properties:
+      DBSubnetGroupName: production-subnet
+      Tags:
+        - Key: category
+          Value: services
+        - Key: environment
+          Value: production
+        - Key: Team
+          Value: production
+      DBSubnetGroupDescription: production subnet group
+      SubnetIds:
+        - !Ref 'productionPrivateSubnet1'
+        - !Ref 'productionPrivateSubnet2'
+    Type: AWS::RDS::DBSubnetGroup
+  ElasticacheSubnetGroup:
+    Properties:
+      CacheSubnetGroupName: production-subnet
+      Description: production subnet group
+      SubnetIds:
+        - !Ref 'productionPrivateSubnet1'
+        - !Ref 'productionPrivateSubnet2'
+    Type: AWS::ElastiCache::SubnetGroup
+  productionLogGroup:
+    Properties:
+      LogGroupName: production-logs
+      RetentionInDays: 365
+    Type: AWS::Logs::LogGroup
+  productionCloudmap:
+    Properties:
+      Name: !Ref 'AWS::StackName'
+      Vpc: !Ref 'productionVpc'
+      Tags:
+        - Key: Name
+          Value: !Ref 'AWS::StackName'
+        - Key: Team
+          Value: production
+        - Key: category
+          Value: services
+        - Key: environment
+          Value: production
+    Type: AWS::ServiceDiscovery::PrivateDnsNamespace
+  Cluster:
+    Properties:
+      ClusterName: !Ref 'AWS::StackName'
+    Type: AWS::ECS::Cluster
+  ECSRole:
+    Properties:
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+        - arn:aws:iam::aws:policy/AmazonDynamoDBReadOnlyAccess
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+      RoleName: !Sub 'ecs-${AWS::StackName}-${AWS::Region}'
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+    Type: AWS::IAM::Role
+  InstanceProfile:
+    Properties:
+      Path: /
+      Roles:
+        - !Ref 'ECSRole'
+    Type: AWS::IAM::InstanceProfile
+  SecurityGroupAlb:
+    Properties:
+      VpcId: !Ref 'productionVpc'
+      GroupDescription: !Sub '${AWS::StackName}-alb'
+    Type: AWS::EC2::SecurityGroup
+  SecurityGroupEc2Hosts:
+    Properties:
+      SecurityGroupIngress:
+        - SourceSecurityGroupId: !Ref 'SecurityGroupAlb'
+          IpProtocol: -1
+      VpcId: !Ref 'productionVpc'
+      GroupDescription: !Sub '${AWS::StackName}-hosts'
+    Type: AWS::EC2::SecurityGroup
+  SecurityEc2HostsIngress:
+    Properties:
+      SourceSecurityGroupId: !Ref 'SecurityGroupEc2Hosts'
+      IpProtocol: '-1'
+      GroupId: !Ref 'SecurityGroupEc2Hosts'
+      FromPort: '-1'
+      ToPort: '-1'
+    Type: AWS::EC2::SecurityGroupIngress
+  SecurityGroupDatabases:
+    Properties:
+      SecurityGroupIngress:
+        - SourceSecurityGroupId: !Ref 'SecurityGroupEc2Hosts'
+          IpProtocol: -1
+      VpcId: !Ref 'productionVpc'
+      GroupDescription: !Sub '${AWS::StackName}-databases'
+    Type: AWS::EC2::SecurityGroup
+  LaunchTemplate:
+    Properties:
+      LaunchTemplateData:
+        UserData: !Base64
+          Fn::Sub: "#!/bin/bash\nyum update -y\nyum install -y aws-cfn-bootstrap\n\
+            /opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName}\
+            \ --resource LaunchTemplate\n/opt/aws/bin/cfn-signal -e $? --region ${AWS::Region}\
+            \ --stack ${AWS::StackName} --resource AutoScalingGroup\nyum install -y\
+            \ https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm\n\
+            systemctl enable amazon-ssm-agent\nsystemctl start amazon-ssm-agent\n"
+        IamInstanceProfile:
+          Arn: !GetAtt 'InstanceProfile.Arn'
+        SecurityGroupIds:
+          - !GetAtt 'SecurityGroupEc2Hosts.GroupId'
+        InstanceType: m6a.xlarge
+        ImageId: ami-062c13e26f1524981
+        KeyName: !Ref 'KeyPair'
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeType: gp3
+    Type: AWS::EC2::LaunchTemplate
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            /etc/cfn/cfn-hup.conf:
+              content: !Sub "[main]\nstack=${AWS::StackId}\nregion=${AWS::Region}\n"
+              mode: '256'
+              owner: root
+              group: root
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              content: !Sub "[cfn-auto-reloader-hook]\ntriggers=post.update\npath=Resources.ContainerInstances.Metadata.AWS::CloudFormation::Init\n\
+                action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName}\
+                \ --resource LaunchTemplate\n"
+            /etc/dnsmasq.conf:
+              content: !Sub "# Server Configuration\nlisten-address=127.0.0.1\nport=53\n\
+                bind-interfaces\nuser=dnsmasq\ngroup=dnsmasq\npid-file=/var/run/dnsmasq.pid\n\
+                # Name resolution options\nresolv-file=/etc/resolv.dnsmasq\ncache-size=500\n\
+                neg-ttl=60\ndomain-needed\nbogus-priv"
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: true
+                ensureRunning: true
+                files:
+                  - /etc/cfn/cfn-hup.conf
+                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+          commands:
+            '01_add_instance_to_cluster':
+              command: !Sub "echo \"ECS_CLUSTER=${Cluster}\nECS_RESERVED_MEMORY=256\"\
+                \ > /etc/ecs/ecs.config"
+            '02_set_nameserver':
+              command: INTERFACE=$(curl --silent http://169.254.169.254/latest/meta-data/network/interfaces/macs/
+                | head -n1); IS_IT_CLASSIC=$(curl --write-out %{http_code} --silent
+                --output /dev/null http://169.254.169.254/latest/meta-data/network/interfaces/macs/${INTERFACE}/vpc-id);
+                if [[ $IS_IT_CLASSIC == '404' ]]; then bash -c "echo 'supersede domain-name-servers
+                127.0.0.1, 172.16.0.23;' >> /etc/dhcp/dhclient.conf && echo 'nameserver
+                172.16.0.23' > /etc/resolv.dnsmasq"; else  bash -c "echo 'supersede
+                domain-name-servers 127.0.0.1, 169.254.169.253;' >> /etc/dhcp/dhclient.conf
+                && echo 'nameserver 169.254.169.253' > /etc/resolv.dnsmasq"; fi
+            '03_install_dnsmasq_package':
+              command: yum install -y dnsmasq bind-utils
+            '04_create_group':
+              command: groupadd -r dnsmasq
+            '05_create_user':
+              command: useradd -r -g dnsmasq dnsmasq
+            '06_add_locahost_nameserver':
+              command: sed -i '/search ap-south-1.compute.internal/a nameserver 127.0.0.1'
+                /etc/resolv.conf
+            '07_enable_dnsmasq_service':
+              command: pidof systemd && systemctl restart dnsmasq.service || service
+                dnsmasq restart
+            '08_start_dnsmasq_service':
+              command: pidof systemd && systemctl enable  dnsmasq.service || chkconfig
+                dnsmasq on
+            '09_configure_dhclient':
+              command: bash -c "dhclient"
+  AutoScalingGroup:
+    Properties:
+      DesiredCapacity: '48'
+      Tags:
+        - PropagateAtLaunch: true
+          Value: !Sub '${AWS::StackName} - ECS Host'
+          Key: Name
+        - PropagateAtLaunch: true
+          Key: environment
+          Value: production
+        - PropagateAtLaunch: true
+          Key: Team
+          Value: production
+      MinSize: '20'
+      MaxSize: '60'
+      VPCZoneIdentifier:
+        - !Ref 'productionPrivateSubnet2'
+        - !Ref 'productionPrivateSubnet1'
+      LaunchTemplate:
+        LaunchTemplateId: !Ref 'LaunchTemplate'
+        Version: !GetAtt 'LaunchTemplate.LatestVersionNumber'
+    Type: AWS::AutoScaling::AutoScalingGroup
+    UpdatePolicy: {}
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
+  AutoScalingPolicy:
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref 'AutoScalingGroup'
+      Cooldown: '300'
+      PolicyType: SimpleScaling
+      ScalingAdjustment: 1
+    Type: AWS::AutoScaling::ScalingPolicy
+  Ec2HostsHighCPUAlarm:
+    Properties:
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref 'AutoScalingGroup'
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Alarm if CPU too high or metric disappears indicating instance
+        is down
+      Namespace: AWS/EC2
+      Period: 60
+      ComparisonOperator: GreaterThanThreshold
+      Statistic: Average
+      Threshold: '60'
+      MetricName: CPUUtilization
+    Type: AWS::CloudWatch::Alarm
+  LaunchTemplateOnDemand:
+    Properties:
+      LaunchTemplateData:
+        UserData: !Base64
+          Fn::Sub: "#!/bin/bash\nyum update -y\nyum install -y aws-cfn-bootstrap\n\
+            /opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName}\
+            \ --resource LaunchTemplateOnDemand\n/opt/aws/bin/cfn-signal -e $? --region\
+            \ ${AWS::Region} --stack ${AWS::StackName} --resource AutoScalingGroupOnDemand\n\
+            yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm\n\
+            systemctl enable amazon-ssm-agent\nsystemctl start amazon-ssm-agent\n"
+        IamInstanceProfile:
+          Arn: !GetAtt 'InstanceProfile.Arn'
+        SecurityGroupIds:
+          - !GetAtt 'SecurityGroupEc2Hosts.GroupId'
+        ImageId: !FindInMap
+          - AWSRegionToAMI
+          - !Ref 'AWS::Region'
+          - AMI
+        KeyName: !Ref 'KeyPair'
+        MetadataOptions:
+          HttpTokens: required
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeType: gp3
+      LaunchTemplateName: production-LaunchTemplateOnDemand
+    Type: AWS::EC2::LaunchTemplate
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            /etc/cfn/cfn-hup.conf:
+              content: !Sub "[main]\nstack=${AWS::StackId}\nregion=${AWS::Region}\n"
+              mode: '256'
+              owner: root
+              group: root
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              content: !Sub "[cfn-auto-reloader-hook]\ntriggers=post.update\npath=Resources.ContainerInstances.Metadata.AWS::CloudFormation::Init\n\
+                action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName}\
+                \ --resource LaunchTemplateOnDemand\n"
+            /etc/dnsmasq.conf:
+              content: !Sub "# Server Configuration\nlisten-address=::1,127.0.0.1\n\
+                port=53\nbind-interfaces\ninterface=lo\nuser=dnsmasq\ngroup=dnsmasq\n\
+                pid-file=/var/run/dnsmasq.pid\nresolv-file=/etc/resolv.dnsmasq\ncache-size=1000\n\
+                neg-ttl=60\ndomain-needed\nbogus-priv"
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: true
+                ensureRunning: true
+                files:
+                  - /etc/cfn/cfn-hup.conf
+                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+          commands:
+            '01_add_instance_to_cluster':
+              command: !Sub "echo ECS_CLUSTER=${Cluster} >> /etc/ecs/ecs.config\n\
+                echo ECS_RESERVED_MEMORY=256 >> /etc/ecs/ecs.config\necho ECS_AVAILABLE_LOGGING_DRIVERS='[\"\
+                awslogs\",\"fluentd\"]' >> /etc/ecs/ecs.config\necho ECS_INSTANCE_ATTRIBUTES='{\"\
+                deployment_type\": \"ondemand\"}' >> /etc/ecs/ecs.config"
+            '02_set_nameserver':
+              command: echo "nameserver 169.254.169.253" > /etc/resolv.dnsmasq
+            '03_install_dnsmasq_package':
+              command: yum install -y dnsmasq bind-utils
+            '04_create_group':
+              command: groupadd -r -f dnsmasq
+            '05_create_user':
+              command: id -u dnsmasq &>/dev/null && (id -nG dnsmasq | grep -qw dnsmasq
+                || usermod -a -G dnsmasq dnsmasq) || useradd -r -g dnsmasq dnsmasq
+            '06_disable_systemd_resolved_stub_resolver':
+              command: "\nmkdir -pv /etc/systemd/resolved.conf.d\n\ncat <<'EOF' |\
+                \ tee /etc/systemd/resolved.conf.d/00-override.conf\n[Resolve]\nDNSStubListener=no\n\
+                MulticastDNS=no\nLLMNR=no\n\nEOF\n\nsystemctl daemon-reload\nsystemctl\
+                \ restart systemd-resolved"
+            '07_add_localhost_nameserver':
+              command: "\nunlink /etc/resolv.conf\ncat <<'EOF' | tee /etc/resolv.conf\n\
+                nameserver 127.0.0.1\nsearch ap-south-1.compute.internal\n\nEOF\n"
+            '08_enable_dnsmasq_service':
+              command: pidof systemd && systemctl enable dnsmasq.service || chkconfig
+                dnsmasq on
+            '09_start_dnsmasq_service':
+              command: pidof systemd && systemctl restart dnsmasq.service || service
+                dnsmasq restart
+  AutoScalingGroupOnDemand:
+    Properties:
+      DesiredCapacity: '1'
+      Tags:
+        - PropagateAtLaunch: true
+          Value: !Sub '${AWS::StackName} - ECS Host'
+          Key: Name
+        - PropagateAtLaunch: true
+          Key: environment
+          Value: production
+        - PropagateAtLaunch: true
+          Key: Team
+          Value: production
+      MinSize: !Ref 'OnDemandMinSize'
+      MaxSize: !Ref 'OnDemandMaxSize'
+      VPCZoneIdentifier:
+        - !Ref 'productionPrivateSubnet2'
+        - !Ref 'productionPrivateSubnet1'
+      NotificationConfigurations:
+        - NotificationTypes:
+            - autoscaling:EC2_INSTANCE_LAUNCH_ERROR
+          TopicARN: !Ref 'NotificationSnsArn'
+      MixedInstancesPolicy:
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref 'LaunchTemplateOnDemand'
+            Version: !GetAtt 'LaunchTemplateOnDemand.LatestVersionNumber'
+          Overrides:
+            - InstanceType: m6a.xlarge
+        InstancesDistribution:
+          OnDemandBaseCapacity: 0
+          OnDemandPercentageAboveBaseCapacity: 100
+          SpotAllocationStrategy: capacity-optimized
+    Type: AWS::AutoScaling::AutoScalingGroup
+    UpdatePolicy: {}
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
+  Ec2HostsHighCPUAlarmOnDemand:
+    Properties:
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref 'AutoScalingGroupOnDemand'
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Alarm if CPU too high or metric disappears                     indicating
+        instance is down
+      Namespace: AWS/EC2
+      Period: 60
+      ComparisonOperator: GreaterThanThreshold
+      Statistic: Average
+      Threshold: '60'
+      MetricName: CPUUtilization
+    Type: AWS::CloudWatch::Alarm
+  AutoScalingPolicyOnDemand:
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref 'AutoScalingGroupOnDemand'
+      Cooldown: '300'
+      PolicyType: SimpleScaling
+      ScalingAdjustment: 1
+    Type: AWS::AutoScaling::ScalingPolicy
+  ClusterHighMemoryReservationAlarmOnDemand:
+    Properties:
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: ClusterName
+          Value: !Ref 'AWS::StackName'
+      AlarmActions:
+        - !Ref 'AutoScalingPolicyOnDemand'
+      AlarmDescription: Alarm if memory reservation is over 75%                     for
+        cluster.
+      Namespace: AWS/ECS
+      Period: 300
+      ComparisonOperator: GreaterThanThreshold
+      Statistic: Average
+      Threshold: '75'
+      MetricName: MemoryReservation
+    Type: AWS::CloudWatch::Alarm
+  LaunchTemplateSpot:
+    Properties:
+      LaunchTemplateData:
+        UserData: !Base64
+          Fn::Sub: "#!/bin/bash\nyum update -y\nyum install -y aws-cfn-bootstrap\n\
+            /opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName}\
+            \ --resource LaunchTemplateSpot\n/opt/aws/bin/cfn-signal -e $? --region\
+            \ ${AWS::Region} --stack ${AWS::StackName} --resource AutoScalingGroupSpot\n\
+            yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm\n\
+            systemctl enable amazon-ssm-agent\nsystemctl start amazon-ssm-agent\n"
+        IamInstanceProfile:
+          Arn: !GetAtt 'InstanceProfile.Arn'
+        SecurityGroupIds:
+          - !GetAtt 'SecurityGroupEc2Hosts.GroupId'
+        ImageId: !FindInMap
+          - AWSRegionToAMI
+          - !Ref 'AWS::Region'
+          - AMI
+        KeyName: !Ref 'KeyPair'
+        MetadataOptions:
+          HttpTokens: required
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeType: gp3
+      LaunchTemplateName: production-LaunchTemplateSpot
+    Type: AWS::EC2::LaunchTemplate
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            /etc/cfn/cfn-hup.conf:
+              content: !Sub "[main]\nstack=${AWS::StackId}\nregion=${AWS::Region}\n"
+              mode: '256'
+              owner: root
+              group: root
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              content: !Sub "[cfn-auto-reloader-hook]\ntriggers=post.update\npath=Resources.ContainerInstances.Metadata.AWS::CloudFormation::Init\n\
+                action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName}\
+                \ --resource LaunchTemplateSpot\n"
+            /etc/dnsmasq.conf:
+              content: !Sub "# Server Configuration\nlisten-address=::1,127.0.0.1\n\
+                port=53\nbind-interfaces\ninterface=lo\nuser=dnsmasq\ngroup=dnsmasq\n\
+                pid-file=/var/run/dnsmasq.pid\nresolv-file=/etc/resolv.dnsmasq\ncache-size=1000\n\
+                neg-ttl=60\ndomain-needed\nbogus-priv"
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: true
+                ensureRunning: true
+                files:
+                  - /etc/cfn/cfn-hup.conf
+                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+          commands:
+            '01_add_instance_to_cluster':
+              command: !Sub "echo ECS_CLUSTER=${Cluster} >> /etc/ecs/ecs.config\n\
+                echo ECS_RESERVED_MEMORY=256 >> /etc/ecs/ecs.config\necho ECS_AVAILABLE_LOGGING_DRIVERS='[\"\
+                awslogs\",\"fluentd\"]' >> /etc/ecs/ecs.config\necho ECS_INSTANCE_ATTRIBUTES='{\"\
+                deployment_type\": \"spot\"}' >> /etc/ecs/ecs.config\necho ECS_ENABLE_SPOT_INSTANCE_DRAINING=true\
+                \ >> /etc/ecs/ecs.config"
+            '02_set_nameserver':
+              command: echo "nameserver 169.254.169.253" > /etc/resolv.dnsmasq
+            '03_install_dnsmasq_package':
+              command: yum install -y dnsmasq bind-utils
+            '04_create_group':
+              command: groupadd -r -f dnsmasq
+            '05_create_user':
+              command: id -u dnsmasq &>/dev/null && (id -nG dnsmasq | grep -qw dnsmasq
+                || usermod -a -G dnsmasq dnsmasq) || useradd -r -g dnsmasq dnsmasq
+            '06_disable_systemd_resolved_stub_resolver':
+              command: "\nmkdir -pv /etc/systemd/resolved.conf.d\n\ncat <<'EOF' |\
+                \ tee /etc/systemd/resolved.conf.d/00-override.conf\n[Resolve]\nDNSStubListener=no\n\
+                MulticastDNS=no\nLLMNR=no\n\nEOF\n\nsystemctl daemon-reload\nsystemctl\
+                \ restart systemd-resolved"
+            '07_add_localhost_nameserver':
+              command: "\nunlink /etc/resolv.conf\ncat <<'EOF' | tee /etc/resolv.conf\n\
+                nameserver 127.0.0.1\nsearch ap-south-1.compute.internal\n\nEOF\n"
+            '08_enable_dnsmasq_service':
+              command: pidof systemd && systemctl enable dnsmasq.service || chkconfig
+                dnsmasq on
+            '09_start_dnsmasq_service':
+              command: pidof systemd && systemctl restart dnsmasq.service || service
+                dnsmasq restart
+  AutoScalingGroupSpot:
+    Properties:
+      DesiredCapacity: '1'
+      Tags:
+        - PropagateAtLaunch: true
+          Value: !Sub '${AWS::StackName} - ECS Host'
+          Key: Name
+        - PropagateAtLaunch: true
+          Key: environment
+          Value: production
+        - PropagateAtLaunch: true
+          Key: Team
+          Value: production
+      MinSize: !Ref 'SpotMinSize'
+      MaxSize: !Ref 'SpotMaxSize'
+      VPCZoneIdentifier:
+        - !Ref 'productionPrivateSubnet2'
+        - !Ref 'productionPrivateSubnet1'
+      NotificationConfigurations:
+        - NotificationTypes:
+            - autoscaling:EC2_INSTANCE_LAUNCH_ERROR
+          TopicARN: !Ref 'NotificationSnsArn'
+      MixedInstancesPolicy:
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref 'LaunchTemplateSpot'
+            Version: !GetAtt 'LaunchTemplateSpot.LatestVersionNumber'
+          Overrides:
+            - InstanceType: m6a.xlarge
+            - InstanceType: c5a.xlarge
+            - InstanceType: c6a.xlarge
+            - InstanceType: m5a.xlarge
+            - InstanceType: r5a.xlarge
+            - InstanceType: r6a.xlarge
+        InstancesDistribution:
+          OnDemandBaseCapacity: 0
+          OnDemandPercentageAboveBaseCapacity: 0
+          SpotAllocationStrategy: capacity-optimized
+    Type: AWS::AutoScaling::AutoScalingGroup
+    UpdatePolicy: {}
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
+  Ec2HostsHighCPUAlarmSpot:
+    Properties:
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref 'AutoScalingGroupSpot'
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Alarm if CPU too high or metric disappears                     indicating
+        instance is down
+      Namespace: AWS/EC2
+      Period: 60
+      ComparisonOperator: GreaterThanThreshold
+      Statistic: Average
+      Threshold: '60'
+      MetricName: CPUUtilization
+    Type: AWS::CloudWatch::Alarm
+  AutoScalingPolicySpot:
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref 'AutoScalingGroupSpot'
+      Cooldown: '300'
+      PolicyType: SimpleScaling
+      ScalingAdjustment: 1
+    Type: AWS::AutoScaling::ScalingPolicy
+  ClusterHighMemoryReservationAlarmSpot:
+    Properties:
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: ClusterName
+          Value: !Ref 'AWS::StackName'
+      AlarmActions:
+        - !Ref 'AutoScalingPolicySpot'
+      AlarmDescription: Alarm if memory reservation is over 75%                     for
+        cluster.
+      Namespace: AWS/ECS
+      Period: 300
+      ComparisonOperator: GreaterThanThreshold
+      Statistic: Average
+      Threshold: '75'
+      MetricName: MemoryReservation
+    Type: AWS::CloudWatch::Alarm
+  ClusterHighCPUAlarm:
+    Properties:
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: ClusterName
+          Value: !Ref 'Cluster'
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Alarm if CPU is too high for cluster.
+      Namespace: AWS/ECS
+      Period: 300
+      ComparisonOperator: GreaterThanThreshold
+      Statistic: Average
+      Threshold: '60'
+      MetricName: CPUUtilization
+    Type: AWS::CloudWatch::Alarm
+  ClusterHighMemoryAlarm:
+    Properties:
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: ClusterName
+          Value: !Ref 'Cluster'
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Alarm if memory is too high for cluster.
+      Namespace: AWS/ECS
+      Period: 300
+      ComparisonOperator: GreaterThanThreshold
+      Statistic: Average
+      Threshold: '60'
+      MetricName: MemoryUtilization
+    Type: AWS::CloudWatch::Alarm
+  ClusterHighMemoryReservationAlarm:
+    Properties:
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: ClusterName
+          Value: !Ref 'AWS::StackName'
+      AlarmActions:
+        - !Ref 'AutoScalingPolicy'
+      AlarmDescription: Alarm if memory reservation is over 75%                     for
+        cluster.
+      Namespace: AWS/ECS
+      Period: 300
+      ComparisonOperator: GreaterThanThreshold
+      Statistic: Average
+      Threshold: '75'
+      MetricName: MemoryReservation
+    Type: AWS::CloudWatch::Alarm
+  ClusterHighMemoryReservationUserNotifcationAlarm:
+    Properties:
+      EvaluationPeriods: 3
+      Dimensions:
+        - Name: ClusterName
+          Value: !Ref 'Cluster'
+      AlarmActions:
+        - !Ref 'NotificationSnsArn'
+      OKActions:
+        - !Ref 'NotificationSnsArn'
+      AlarmDescription: Alarm if memory reservation is over 75%                 for
+        cluster for 15 minutes.
+      Namespace: AWS/ECS
+      Period: 300
+      ComparisonOperator: GreaterThanThreshold
+      Statistic: Average
+      Threshold: '75'
+      MetricName: MemoryReservation
+    Type: AWS::CloudWatch::Alarm

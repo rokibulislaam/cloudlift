@@ -1,0 +1,21 @@
+roles:
+  - name: owner
+    github:
+      teams: ["GetSimpl:devops"]
+      users: ["chhekur"]
+
+  - name: pipeline-operator
+    github:
+      users:
+        [
+          "ayushwagdre",
+          "himanshuagarwal",
+          "chhekur",
+          "asaxena012",
+          "sangues",
+          "akilaragh",
+          "yatin-gupta86",
+          "nehatayade03"
+        ]
+    local:
+      users: ["simpl_admin_user"]

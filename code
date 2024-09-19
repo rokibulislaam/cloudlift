@@ -1,0 +1,107 @@
+def _build_service_args(
+    self,
+    config,
+    service_name,
+    task_definition,
+    placement_constraint,
+    launch_type,
+    alb_sg=None,
+):
+    args = {
+        "Cluster": self.cluster_name,
+        "TaskDefinition": Ref(task_definition),
+        "DesiredCount": self._get_desired_task_count_for_service(service_name),
+        "LaunchType": launch_type,
+        "Tags": Tags(Team=self.team_name, environment=self.env),
+        "DeploymentConfiguration": DeploymentConfiguration(
+            MinimumHealthyPercent=100, MaximumPercent=200
+        ),
+        **placement_constraint,
+    }
+
+    network_config = self._build_network_configuration(config, alb_sg)
+    if network_config:
+        args["NetworkConfiguration"] = network_config
+
+    if self._has_custom_metrics(config):
+        service_registry = self._build_service_registry(config, service_name)
+        args["ServiceRegistries"] = [service_registry]
+
+    if not self._is_fargate_launch_type(config):
+        args["PlacementStrategies"] = self.PLACEMENT_STRATEGIES
+
+    return args
+
+
+def _build_network_configuration(self, config, alb_sg):
+    if not self._requires_awsvpc_network_mode(config):
+        return None
+
+    security_groups = self._build_security_groups(config, alb_sg)
+    subnets = [Ref(self.private_subnet1), Ref(self.private_subnet2)]
+
+    return NetworkConfiguration(
+        AwsvpcConfiguration=AwsvpcConfiguration(
+            Subnets=subnets,
+            SecurityGroups=security_groups,
+        )
+    )
+
+
+def _requires_awsvpc_network_mode(self, config):
+    return (
+        self._is_fargate_launch_type(config)
+        or self._has_http_interface(config)
+        or self._has_custom_metrics(config)
+    )
+
+
+def _build_security_groups(self, config, alb_sg):
+    if not self._is_fargate_launch_type(config):
+        return [ImportValue("{self.env}Ec2Host".format(**locals()))]
+
+    security_group = SecurityGroup(
+        pascalcase("FargateService" + self.env + service_name),
+        GroupName=pascalcase("FargateService" + self.env + service_name),
+        SecurityGroupIngress=(self._build_security_group_ingress_rules(config, alb_sg)),
+        VpcId=Ref(self.vpc),
+        GroupDescription=pascalcase("FargateService" + self.env + service_name),
+        Tags=Tags(Team=self.team_name, environment=self.env),
+    )
+    self.template.add_resource(security_group)
+    return [Ref(security_group)]
+
+
+def _build_security_group_ingress_rules(self, config, alb_sg):
+    if not self._has_http_interface(config) or alb_sg is None:
+        return []
+
+    return [
+        {
+            "IpProtocol": "TCP",
+            "SourceSecurityGroupId": Ref(alb_sg),
+            "ToPort": int(config["http_interface"]["container_port"]),
+            "FromPort": int(config["http_interface"]["container_port"]),
+        }
+    ]
+
+
+def _build_service_registry(self, config, service_name):
+    service_discovery = SD(
+        service_name + "ServiceRegistry",
+        DnsConfig=DnsConfig(
+            RoutingPolicy="MULTIVALUE",
+            DnsRecords=[DnsRecord(TTL="60", Type="SRV")],
+            NamespaceId=ImportValue("{self.env}Cloudmap".format(**locals())),
+        ),
+        Tags=Tags(
+            {"METRICS_PATH": config["custom_metrics"]["metrics_path"]},
+            {"METRICS_PORT": config["custom_metrics"]["metrics_port"]},
+        ),
+    )
+    self.template.add_resource(service_discovery)
+
+    return ServiceRegistry(
+        RegistryArn=GetAtt(service_discovery, "Arn"),
+        Port=int(config["custom_metrics"]["metrics_port"]),
+    )

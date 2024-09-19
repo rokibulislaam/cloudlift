@@ -1,0 +1,230 @@
+task id: `1af83932f7184aef9d95d0ddbafb42e5`
+task arn: `arn:aws:ecs:ap-south-1:725827686899:task/cluster-production/1af83932f7184aef9d95d0ddbafb42e5`
+service: `api-production-Api-emeFASDahSvC
+`
+AWS_PROFILE=main-account aws ecs describe-tasks --tasks arn:aws:ecs:ap-south-1:725827686899:task/cluster-production/1af83932f7184aef9d95d0ddbafb42e5 --cluster cluster-production
+
+````json
+{
+    "tasks": [
+        {
+            "attachments": [],
+            "attributes": [
+                {
+                    "name": "ecs.cpu-architecture",
+                    "value": "x86_64"
+                }
+            ],
+            "availabilityZone": "ap-south-1b",
+            "clusterArn": "arn:aws:ecs:ap-south-1:725827686899:cluster/cluster-production",
+            "connectivity": "CONNECTED",
+            "connectivityAt": 1722825975.45,
+            "containerInstanceArn": "arn:aws:ecs:ap-south-1:725827686899:container-instance/cluster-production/a2830314b1f340e8a4e9afb2b472512b",
+            "containers": [
+                {
+                    "containerArn": "arn:aws:ecs:ap-south-1:725827686899:container/cluster-production/1af83932f7184aef9d95d0ddbafb42e5/13ebd766-c918-4d6a-87ce-22e049ebd07e",
+                    "taskArn": "arn:aws:ecs:ap-south-1:725827686899:task/cluster-production/1af83932f7184aef9d95d0ddbafb42e5",
+                    "name": "ApiContainer",
+                    "image": "725827686899.dkr.ecr.ap-south-1.amazonaws.com/api-repo@sha256:145eda3c61c11cca2a0b1c5fe0bf36e9e1f6101a2aa3e014fe03babbb84ba638",
+                    "imageDigest": "sha256:145eda3c61c11cca2a0b1c5fe0bf36e9e1f6101a2aa3e014fe03babbb84ba638",
+                    "runtimeId": "b99347997b6c7674bc27d37f90543e073917da8c7d24e0b673fdceebbe073e02",
+                    "lastStatus": "STOPPED",
+                    "networkBindings": [
+                        {
+                            "bindIP": "0.0.0.0",
+                            "containerPort": 80,
+                            "hostPort": 32799,
+                            "protocol": "tcp"
+                        }
+                    ],
+                    "networkInterfaces": [],
+                    "healthStatus": "UNKNOWN",
+                    "cpu": "0",
+                    "memory": "4500",
+                    "memoryReservation": "3000"
+                },
+                {
+                    "containerArn": "arn:aws:ecs:ap-south-1:725827686899:container/cluster-production/1af83932f7184aef9d95d0ddbafb42e5/bf4384a5-8066-4e84-b1f6-0f892b089efc",
+                    "taskArn": "arn:aws:ecs:ap-south-1:725827686899:task/cluster-production/1af83932f7184aef9d95d0ddbafb42e5",
+                    "name": "fluentbit-firelens-sidecar",
+                    "image": "725827686899.dkr.ecr.ap-south-1.amazonaws.com/production-fluentbit-firelens@sha256:6d3a1f97d8a8d416ed3637c60f5e9c5b7db0606f950dcfb050167e792efaccb6",
+                    "imageDigest": "sha256:6d3a1f97d8a8d416ed3637c60f5e9c5b7db0606f950dcfb050167e792efaccb6",
+                    "runtimeId": "683e0a6bb3b490bdea1e4acf41e1d5680bd3f8cf83f870181f46383f8ac99d6d",
+                    "lastStatus": "STOPPED",
+                    "networkBindings": [],
+                    "networkInterfaces": [],
+                    "healthStatus": "HEALTHY",
+                    "cpu": "0",
+                    "memoryReservation": "100"
+                }
+            ],
+            "cpu": "0",
+            "createdAt": 1722825975.45,
+            "desiredStatus": "STOPPED",
+            "enableExecuteCommand": false,
+            "group": "service:api-production-Api-emeFASDahSvC",
+            "healthStatus": "HEALTHY",
+            "lastStatus": "STOPPED",
+            "launchType": "EC2",
+            "memory": "3100",
+            "overrides": {
+                "containerOverrides": [
+                    {
+                        "name": "ApiContainer"
+                    },
+                    {
+                        "name": "fluentbit-firelens-sidecar"
+                    }
+                ],
+                "inferenceAcceleratorOverrides": []
+            },
+            "pullStartedAt": 1722825976.837,
+            "pullStoppedAt": 1722825989.809,
+            "startedAt": 1722826012.877,
+            "startedBy": "ecs-svc/4491149827709721818",
+            "stopCode": "ServiceSchedulerInitiated",
+            "stoppedAt": 1722854819.097,
+            "stoppedReason": "Service api-production-Api-emeFASDahSvC: container instance is in DRAINING state",
+            "stoppingAt": 1722854744.406,
+            "tags": [],
+            "taskArn": "arn:aws:ecs:ap-south-1:725827686899:task/cluster-production/1af83932f7184aef9d95d0ddbafb42e5",
+            "taskDefinitionArn": "arn:aws:ecs:ap-south-1:725827686899:task-definition/ApiFamily:8420",
+            "version": 8
+        }
+    ],
+    "failures": []
+}```
+
+instanceId: `i-00dac316b7ac52833`
+
+instance details:
+```json
+{
+    "Reservations": [
+        {
+            "Groups": [],
+            "Instances": [
+                {
+                    "AmiLaunchIndex": 0,
+                    "ImageId": "ami-062c13e26f1524981",
+                    "InstanceId": "i-00dac316b7ac52833",
+                    "InstanceType": "m6a.xlarge",
+                    "KeyName": "production-cluster-v3",
+                    "LaunchTime": "2024-08-03T14:49:09.000Z",
+                    "Monitoring": {
+                        "State": "disabled"
+                    },
+                    "Placement": {
+                        "AvailabilityZone": "ap-south-1b",
+                        "GroupName": "",
+                        "Tenancy": "default"
+                    },
+                    "PrivateDnsName": "",
+                    "ProductCodes": [],
+                    "PublicDnsName": "",
+                    "State": {
+                        "Code": 48,
+                        "Name": "terminated"
+                    },
+                    "StateTransitionReason": "User initiated (2024-08-05 10:45:57 GMT)",
+                    "Architecture": "x86_64",
+                    "BlockDeviceMappings": [],
+                    "ClientToken": "52764462-dd04-b4f4-c979-93f5091b70ce",
+                    "EbsOptimized": false,
+                    "EnaSupport": true,
+                    "Hypervisor": "xen",
+                    "NetworkInterfaces": [],
+                    "RootDeviceName": "/dev/xvda",
+                    "RootDeviceType": "ebs",
+                    "SecurityGroups": [],
+                    "StateReason": {
+                        "Code": "Client.UserInitiatedShutdown",
+                        "Message": "Client.UserInitiatedShutdown: User initiated shutdown"
+                    },
+                    "Tags": [
+                        {
+                            "Key": "aws:autoscaling:groupName",
+                            "Value": "cluster-production-AutoScalingGroup-1J43PLGEIPNLE"
+                        },
+                        {
+                            "Key": "aws:cloudformation:stack-id",
+                            "Value": "arn:aws:cloudformation:ap-south-1:725827686899:stack/cluster-production/fa1f8030-d282-11e8-913a-503a56826a2a"
+                        },
+                        {
+                            "Key": "aws:ec2launchtemplate:version",
+                            "Value": "11"
+                        },
+                        {
+                            "Key": "category",
+                            "Value": "services"
+                        },
+                        {
+                            "Key": "aws:cloudformation:stack-name",
+                            "Value": "cluster-production"
+                        },
+                        {
+                            "Key": "Team",
+                            "Value": "production"
+                        },
+                        {
+                            "Key": "aws:cloudformation:logical-id",
+                            "Value": "AutoScalingGroup"
+                        },
+                        {
+                            "Key": "environment",
+                            "Value": "production"
+                        },
+                        {
+                            "Key": "aws:ec2launchtemplate:id",
+                            "Value": "lt-0718fcfbe98738c7b"
+                        },
+                        {
+                            "Key": "Name",
+                            "Value": "cluster-production - ECS Host"
+                        }
+                    ],
+                    "VirtualizationType": "hvm",
+                    "CpuOptions": {
+                        "CoreCount": 2,
+                        "ThreadsPerCore": 2
+                    },
+                    "CapacityReservationSpecification": {
+                        "CapacityReservationPreference": "open"
+                    },
+                    "HibernationOptions": {
+                        "Configured": false
+                    },
+                    "MetadataOptions": {
+                        "State": "pending",
+                        "HttpTokens": "required",
+                        "HttpPutResponseHopLimit": 2,
+                        "HttpEndpoint": "enabled",
+                        "HttpProtocolIpv6": "disabled",
+                        "InstanceMetadataTags": "disabled"
+                    },
+                    "EnclaveOptions": {
+                        "Enabled": false
+                    },
+                    "BootMode": "uefi-preferred",
+                    "PlatformDetails": "Linux/UNIX",
+                    "UsageOperation": "RunInstances",
+                    "UsageOperationUpdateTime": "2024-08-03T14:49:09.000Z",
+                    "MaintenanceOptions": {
+                        "AutoRecovery": "default"
+                    },
+                    "CurrentInstanceBootMode": "uefi"
+                }
+            ],
+            "OwnerId": "725827686899",
+            "RequesterId": "968245739290",
+            "ReservationId": "r-0bc11c88103ff2eab"
+        }
+    ]
+}```
+
+targetGroupARN: arn:aws:elasticloadbalancing:ap-south-1:725827686899:targetgroup/api-p-Targe-GPLKYAZ4B8XA/e7f410766b223bcd
+
+
+task stop requested at: `8/5/2024, 4:15:44 PM`
+deregistered at: `2024-08-05T10:45:53Z` or `8/5/2024, 4:15:53 PM` IST
+task stopped at: 1722854744.406 epoch or `8/5/2024, 4:15:44 PM` 
