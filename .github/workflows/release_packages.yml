@@ -92,7 +92,11 @@ jobs:
       matrix:
         include:
           - os: macos-latest
+            build_os: darwin
           - os: ubuntu-latest
+            build_os: linux
+          - os: ubuntu-latest
+            build_os: alpine
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -127,25 +131,14 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            build_os: darwin
           - os: ubuntu-latest
-            build_os: linux
-          - os: ubuntu-latest
-            build_os: alpine
     runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        
-      - name: Check for file changes in scripts dir
-        id: scripts_changed
-        uses: tj-actions/changed-files@v45
-        with:
-          files: scripts
 
       - name: Download Artifacts
-        if: steps.scripts_changed.outputs.files_changed == 'true'
         uses: actions/download-artifact@v4
         with:
           path: "${{ github.workspace }}/scripts/${{ github.ref }}"
@@ -156,12 +149,8 @@ jobs:
           python-version: "${{ env.PYTHON_VERSION }}"
 
       - name: Test Installer
-        if: steps.scripts_changed.outputs.files_changed == 'true'
         run: sh scripts/test_installer.sh
 
-      - name: No file changes in scripts dir
-        if: steps.scripts_changed.outputs.files_changed == 'false'
-        run: echo "No file changes in scripts dir"
 
   release:
     runs-on: ubuntu-latest
