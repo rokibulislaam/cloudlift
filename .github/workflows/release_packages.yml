@@ -78,11 +78,7 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            build_os: darwin
           - os: ubuntu-latest
-            build_os: linux
-          - os: ubuntu-latest
-            build_os: alpine
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -136,18 +132,15 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: "${{ github.workspace }}/artifacts"
-      
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "${{ env.PYTHON_VERSION }}"
-          
+
       - name: Test Installer
         if: steps.scripts_changed.outputs.files_changed == 'true'
-        run: sh -ec |
-          current_tag=$(git describe --tags --abbrev=0)
-          "hey there"
-          python3 -m http.server 8000 ./ &
+        run: sh scripts/test_installer.sh
 
       - name: No file changes in scripts dir
         if: steps.scripts_changed.outputs.files_changed == 'false'
