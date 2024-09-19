@@ -61,9 +61,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: "${{ env.package_name }}"
-          path: |
-            "/tmp/${{ env.package_name }}.tar.gz"
-  
+          path: "/tmp/${{ env.package_name }}.tar.gz"
+
   add_checksums:
     needs: build
     runs-on: ubuntu-latest
@@ -73,14 +72,14 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: "${{ github.workspace }}/artifacts"
-    
+
       - name: Generate Checksums
         run: |
           find "${{ github.workspace }}/artifacts" -type f -name "*.tar.gz" | while read -r file; do
               sha=$(sha256sum "$file" | cut -d' ' -f1)
               echo "$(basename "$file"): $sha" >> ${{ github.workspace }}/checksums.txt
           done
-      
+
       - name: Upload Checksums
         uses: actions/upload-artifact@v4
         with:
@@ -123,7 +122,7 @@ jobs:
           python scripts/build.py --os ${{ matrix.build_os }}  --only-test --package-dir ${{ github.workspace }}/artifacts/${{ env.package_name }}
 
   test_installer:
-    needs: build
+    needs: add_artifacts
     strategy:
       matrix:
         include:
