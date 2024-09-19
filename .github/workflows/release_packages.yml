@@ -149,7 +149,7 @@ jobs:
           python-version: "${{ env.PYTHON_VERSION }}"
 
       - name: Test Installer
-        run: sh scripts/test_installer.sh
+        run: cd script sh && test_installer.sh
 
 
   release:
