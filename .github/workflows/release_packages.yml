@@ -152,7 +152,7 @@ jobs:
       - name: Test Installer
         run: |
           installer_test_path=/tmp/installer-test
-          installer_test_artifacts_path=$installer_test_path/${{ env.tag}}
+          installer_test_artifacts_path=$installer_test_path/${{ github.ref_name }}
           mkdir -p $installer_test_path
           mkdir -p $installer_test_artifacts_path
           find ./artifacts -name '*.tar.gz' -exec mv {} $installer_test_artifacts_path \;
