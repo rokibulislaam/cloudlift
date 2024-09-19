@@ -159,7 +159,7 @@ jobs:
           find ./artifacts -name 'checksums.txt' -exec mv {} $installer_test_artifacts_path \;
           cp -r scripts/* /tmp/installer-test
           cd /tmp/installer-test
-          bash test_installer.sh ${{ env.tag }}
+          bash test_installer.sh ${{ github.ref_name }} 
 
   release:
     runs-on: ubuntu-latest
