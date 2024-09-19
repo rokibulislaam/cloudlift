@@ -122,7 +122,7 @@ jobs:
           python scripts/build.py --os ${{ matrix.build_os }}  --only-test --package-dir ${{ github.workspace }}/artifacts/${{ env.package_name }}
 
   test_installer:
-    needs: add_artifacts
+    needs: add_checksums
     strategy:
       matrix:
         include:
