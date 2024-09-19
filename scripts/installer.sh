@@ -69,15 +69,46 @@ confirm_message() {
 }
 
 # ----------------------------------------
-# Core Functions
+# Sudo Handling
 # ----------------------------------------
 
-check_sudo() {
-  print_info "Checking if running as root..."
-  if [ "$(id -u)" -ne 0 ]; then
-    print_error "Please run as root or with sudo."
+check_sudo_access() {
+  if [ "$(id -u)" = "0" ]; then
+    print_info "Running as root, sudo access available."
+    return 0
+  fi
+  
+  print_info "Checking for sudo access (may prompt for your password)"
+  
+  if command -v sudo >/dev/null; then
+    if sudo -v 2>/dev/null; then
+      print_info "Sudo access is available."
+      return 0
+    else
+      print_warning "Sudo access is not available without a password."
+      return 1
+    fi
+  else
+    print_warning "Sudo is not installed on this system."
+    return 1
   fi
 }
+
+exec_with_sudo() {
+  if [ "$(id -u)" = "0" ]; then
+    print_info "Executing as root: $*"
+    "$@"
+  elif check_sudo_access; then
+    print_info "Executing with sudo: $*"
+    sudo "$@"
+  else
+    print_error "This operation requires root privileges. Please run as root or ensure sudo access is available."
+  fi
+}
+
+# ----------------------------------------
+# Core Functions
+# ----------------------------------------
 
 get_latest_release() {
   print_info "Getting latest release version..."
@@ -113,7 +144,7 @@ download_cloudlift() {
   download_url="${DOWNLOAD_BASE_URL}/v${PACKAGE_VERSION}/${ARCHIVE_NAME}.tar.gz"
   print_info "Downloading from: ${download_url}"
   mkdir -p "${TEMP_DIR}"
-  if ! curl -L -o "${TEMP_DIR}/${ARCHIVE_NAME}.tar.gz" "${download_url}"; then
+  if ! exec_with_sudo curl -L -o "${TEMP_DIR}/${ARCHIVE_NAME}.tar.gz" "${download_url}"; then
     print_error "Failed to download Cloudlift package."
   fi
 }
@@ -121,7 +152,7 @@ download_cloudlift() {
 verify_checksum() {
   print_info "Verifying checksum..."
   checksum_url="${DOWNLOAD_BASE_URL}/v${PACKAGE_VERSION}/checksums.txt"
-  if ! curl -L -o "${TEMP_DIR}/checksums.txt" "${checksum_url}"; then
+  if ! exec_with_sudo curl -L -o "${TEMP_DIR}/checksums.txt" "${checksum_url}"; then
     print_error "Failed to download checksum."
   fi
 
@@ -139,21 +170,21 @@ verify_checksum() {
 
 unarchive_cloudlift() {
   print_info "Unarchiving Cloudlift package..."
-  [ -d "${TEMP_DIR}/${ARCHIVE_NAME}" ] && rm -rf "${TEMP_DIR}/${ARCHIVE_NAME}"
-  if ! tar -xzf "${TEMP_DIR}/${ARCHIVE_NAME}.tar.gz" -C "${TEMP_DIR}" >/dev/null; then
+  [ -d "${TEMP_DIR}/${ARCHIVE_NAME}" ] && exec_with_sudo rm -rf "${TEMP_DIR}/${ARCHIVE_NAME}"
+  if ! exec_with_sudo tar -xzf "${TEMP_DIR}/${ARCHIVE_NAME}.tar.gz" -C "${TEMP_DIR}" >/dev/null; then
     print_error "Failed to unarchive Cloudlift package."
   fi
 }
 
 install_cloudlift() {
   print_info "Installing Cloudlift package..."
-  [ -d "${PACKAGE_DEST_DIR}/${PACKAGE_NAME}" ] && rm -rf "${PACKAGE_DEST_DIR}/${PACKAGE_NAME}"
-  [ -L "${PACKAGE_BIN_DIR}/${PACKAGE_NAME}" ] && rm "${PACKAGE_BIN_DIR}/${PACKAGE_NAME}"
+  [ -d "${PACKAGE_DEST_DIR}/${PACKAGE_NAME}" ] && exec_with_sudo rm -rf "${PACKAGE_DEST_DIR}/${PACKAGE_NAME}"
+  [ -L "${PACKAGE_BIN_DIR}/${PACKAGE_NAME}" ] && exec_with_sudo rm "${PACKAGE_BIN_DIR}/${PACKAGE_NAME}"
 
-  if ! cp -r "${TEMP_DIR}/${ARCHIVE_NAME}" "${PACKAGE_DEST_DIR}/${PACKAGE_NAME}"; then
+  if ! exec_with_sudo cp -r "${TEMP_DIR}/${ARCHIVE_NAME}" "${PACKAGE_DEST_DIR}/${PACKAGE_NAME}"; then
     print_error "Failed to copy Cloudlift package."
   fi
-  if ! ln -s "${PACKAGE_DEST_DIR}/${PACKAGE_NAME}/cloudlift" "${PACKAGE_BIN_DIR}/${PACKAGE_NAME}"; then
+  if ! exec_with_sudo ln -s "${PACKAGE_DEST_DIR}/${PACKAGE_NAME}/cloudlift" "${PACKAGE_BIN_DIR}/${PACKAGE_NAME}"; then
     print_error "Failed to create symlink."
   fi
 }
@@ -183,8 +214,8 @@ uninstall_cloudlift() {
   print_info "Current Cloudlift package version: ${current_version}"
   confirm_message "Do you want to uninstall Cloudlift package?"
 
-  [ -d "${PACKAGE_DEST_DIR}/${PACKAGE_NAME}" ] && rm -rf "${PACKAGE_DEST_DIR}/${PACKAGE_NAME}"
-  [ -L "${PACKAGE_BIN_DIR}/${PACKAGE_NAME}" ] && rm "${PACKAGE_BIN_DIR}/${PACKAGE_NAME}"
+  [ -d "${PACKAGE_DEST_DIR}/${PACKAGE_NAME}" ] && exec_with_sudo rm -rf "${PACKAGE_DEST_DIR}/${PACKAGE_NAME}"
+  [ -L "${PACKAGE_BIN_DIR}/${PACKAGE_NAME}" ] &&  exec_with_sudo rm "${PACKAGE_BIN_DIR}/${PACKAGE_NAME}"
 
   if command -v "cloudlift" >/dev/null; then
     print_error "Failed to uninstall Cloudlift package."
@@ -257,8 +288,6 @@ main() {
 
   print_info "Cloudlift installation started..."
   print_info "For OS: ${OS_TYPE}, Arch: ${ARCH_TYPE}, Version: ${PACKAGE_VERSION}"
-
-  check_sudo
 
   if [ "${IS_UNINSTALL}" = true ]; then
     uninstall_cloudlift
