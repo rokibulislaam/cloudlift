@@ -57,11 +57,20 @@ jobs:
       - name: Build Cloudlift Package
         run: python scripts/build.py --os ${{ matrix.build_os }}
 
-      - name: Archive Artifact
+      - name: Calculate SHA of Packages
+        run: |
+          find "/tmp" -type f -name "*.tar.gz" | while read -r file; do
+              sha=$(sha256sum "$file" | cut -d' ' -f1)
+              echo "$(basename "$file"): $sha" >> /tmp/checksums.txt
+          done
+
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: "${{ env.package_name }}"
-          path: "/tmp/${{ env.package_name }}.tar.gz"
+          path: |
+            "/tmp/${{ env.package_name }}.tar.gz"
+            "/tmp/checksums.txt"
 
   test:
     needs: build
@@ -102,6 +111,48 @@ jobs:
         run: |
           python scripts/build.py --os ${{ matrix.build_os }}  --only-test --package-dir ${{ github.workspace }}/artifacts/${{ env.package_name }}
 
+  test_installer:
+    needs: build
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            build_os: darwin
+          - os: ubuntu-latest
+            build_os: linux
+          - os: ubuntu-latest
+            build_os: alpine
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Check for file changes in scripts dir
+        id: scripts_changed
+        uses: tj-actions/changed-files@v45
+        with:
+          files: scripts
+
+      - name: Download Artifacts
+        if: steps.scripts_changed.outputs.files_changed == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          path: "${{ github.workspace }}/artifacts"
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "${{ env.PYTHON_VERSION }}"
+          
+      - name: Test Installer
+        if: steps.scripts_changed.outputs.files_changed == 'true'
+        run: sh -ec |
+          current_tag=$(git describe --tags --abbrev=0)
+          "hey there"
+          python3 -m http.server 8000 ./ &
+
+      - name: No file changes in scripts dir
+        if: steps.scripts_changed.outputs.files_changed == 'false'
+        run: echo "No file changes in scripts dir"
+
   release:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
@@ -118,13 +169,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: "${{ github.workspace }}/artifacts"
-
-      - name: Calculate SHA of Packages
-        run: |
-          find "${{ github.workspace }}/artifacts" -type f -name "*.tar.gz" | while read -r file; do
-              sha=$(sha256sum "$file" | cut -d' ' -f1)
-              echo "$(basename "$file"): $sha" >> checksums.txt
-          done
 
       - name: Create Release
         uses: softprops/action-gh-release@v2

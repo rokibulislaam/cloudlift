@@ -27,9 +27,8 @@ if [ "${OS_TYPE}" = "linux" ]; then
 fi
 
 REPO_OWNER="GetSimpl"
-DOWNLOAD_BASE_URL="https://github.com/${REPO_OWNER}/cloudlift/releases/download"
-RELEASES_URL="https://api.github.com/repos/${REPO_OWNER}/cloudlift/releases"
-LATEST_RELEASE_URL="${RELEASES_URL}/latest"
+DOWNLOAD_BASE_URL=${CLOUDLIFT_DOWNLOAD_BASE_URL:-"https://github.com/${REPO_OWNER}/cloudlift/releases/download"}
+LATEST_RELEASE_URL=${CLOUDLIFT_LATEST_RELEASE_URL:-"https://api.github.com/repos/${REPO_OWNER}/cloudlift/releases/latest"}
 
 IS_UNINSTALL=false
 AUTO_APPROVE=false
@@ -112,29 +111,15 @@ exec_with_sudo() {
 
 get_latest_release() {
   print_info "Getting latest release version..."
-  latest_release=$(curl -sL "${LATEST_RELEASE_URL}" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
+  latest_release=$(curl -sL "${LATEST_RELEASE_URL}" | jq -r ".tag_name")
   [ -z "${latest_release}" ] && print_error "Failed to get latest release version."
   PACKAGE_VERSION=$(echo "${latest_release}" | sed 's/^v//')
   print_info "Latest release version: v${PACKAGE_VERSION}"
 }
 
-validate_release() {
-  all_releases_details=$(curl -sL "${RELEASES_URL}")
-  all_releases=$(echo "${all_releases_details}" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | sed 's/^v//' | sort -V)
-
-  if ! echo "${all_releases}" | grep -q "${PACKAGE_VERSION}"; then
-    print_error "Could not find Cloudlift release with version: v${PACKAGE_VERSION}\nAvailable versions:\n${all_releases}"
-  fi
-
-  if ! echo "${all_releases_details}" | grep -q "${ARCHIVE_NAME}"; then
-    print_error "Could not find Cloudlift release with archive: ${ARCHIVE_NAME}"
-  fi
-}
-
 download_cloudlift() {
   ARCHIVE_NAME="${PACKAGE_NAME}-${OS_TYPE}-${ARCH_TYPE}-v${PACKAGE_VERSION}"
   print_info "Downloading Cloudlift package for: ${ARCHIVE_NAME}"
-  validate_release
 
   supported_os_arch="${OS_TYPE}-${ARCH_TYPE}"
   if ! echo "${SUPPORTED_TYPES}" | grep -q "${supported_os_arch}"; then
@@ -144,7 +129,7 @@ download_cloudlift() {
   download_url="${DOWNLOAD_BASE_URL}/v${PACKAGE_VERSION}/${ARCHIVE_NAME}.tar.gz"
   print_info "Downloading from: ${download_url}"
   mkdir -p "${TEMP_DIR}"
-  if ! exec_with_sudo curl -L -o "${TEMP_DIR}/${ARCHIVE_NAME}.tar.gz" "${download_url}"; then
+  if ! exec_with_sudo curl --fail -L -o "${TEMP_DIR}/${ARCHIVE_NAME}.tar.gz" "${download_url}"; then
     print_error "Failed to download Cloudlift package."
   fi
 }
@@ -152,7 +137,7 @@ download_cloudlift() {
 verify_checksum() {
   print_info "Verifying checksum..."
   checksum_url="${DOWNLOAD_BASE_URL}/v${PACKAGE_VERSION}/checksums.txt"
-  if ! exec_with_sudo curl -L -o "${TEMP_DIR}/checksums.txt" "${checksum_url}"; then
+  if ! exec_with_sudo curl --fail -L -o "${TEMP_DIR}/checksums.txt" "${checksum_url}"; then
     print_error "Failed to download checksum."
   fi
 
@@ -226,7 +211,7 @@ uninstall_cloudlift() {
 preflight_check() {
   print_info "Running preflight checks..."
   [ -z "${TERM}" ] && AUTO_APPROVE=true
-  for cmd in curl tar gzip; do
+  for cmd in curl tar gzip jq; do
     if ! command -v "$cmd" >/dev/null; then
       print_error "$cmd is required."
     fi
