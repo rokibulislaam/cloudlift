@@ -151,12 +151,15 @@ jobs:
 
       - name: Test Installer
         run: |
-          mkdir -p /tmp/installer-test
-          find ./artifacts -name '*.tar.gz' -exec mv {} /tmp/installer-test \;
-          find ./artifacts -name 'checksums.txt' -exec mv {} /tmp/installer-test \;
+          installer_test_path=/tmp/installer-test
+          installer_test_artifacts_path=$installer_test_path/${{ env.tag}}
+          mkdir -p $installer_test_path
+          mkdir -p $installer_test_artifacts_path
+          find ./artifacts -name '*.tar.gz' -exec mv {} $installer_test_artifacts_path \;
+          find ./artifacts -name 'checksums.txt' -exec mv {} $installer_test_artifacts_path \;
           cp -r scripts/* /tmp/installer-test
           cd /tmp/installer-test
-          sh test_installer.sh
+          bash test_installer.sh
 
 
   release:
