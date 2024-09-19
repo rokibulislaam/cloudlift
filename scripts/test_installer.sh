@@ -7,11 +7,15 @@ cleanup() {
     kill $SERVER_PID 2>/dev/null || true
 }
 
-# Set up trap to call cleanup function on exit signals
-trap cleanup EXIT SIGINT SIGTERM
+current_tag="$1"
+if [ -z "$current_tag" ]; then
+    echo "Error: No tag provided" >&2
+    exit 1
+fi
+echo "Current tag: $current_tag"
 
 # Get the current tag
-current_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v1.0.0")
+# current_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v1.0.0")
 
 create_mock_files() {
     # Create JSON response to mock GitHub's release API endpoint
