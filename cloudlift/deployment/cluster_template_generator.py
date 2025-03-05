@@ -630,7 +630,8 @@ class ClusterTemplateGenerator(TemplateGenerator):
             spot_instance_pools = {}
             if 'allocation_strategy' in self.configuration['cluster'] and self.configuration['cluster']['allocation_strategy'] == 'lowest-price':
                 spot_instance_pools = {
-                    'SpotInstancePools' : self.configuration['cluster']['spot_instance_pools']
+                    # 'spot_instance_pools' is not always present in the configuration, default to 2
+                    'SpotInstancePools' : self.configuration['cluster'].get('spot_instance_pools', 2)
                 }
             self.auto_scaling_group = AutoScalingGroup(
                 "AutoScalingGroup"+deployment_type,
@@ -671,8 +672,8 @@ class ClusterTemplateGenerator(TemplateGenerator):
                     InstancesDistribution=InstancesDistribution(
                         OnDemandBaseCapacity=0,
                         OnDemandPercentageAboveBaseCapacity=0 if deployment_type == 'Spot' else 100,
-                        SpotAllocationStrategy="capacity-optimized" if deployment_type == 'OnDemand' else self.configuration['cluster']['allocation_strategy'],
-                        **spot_instance_pools 
+                        SpotAllocationStrategy="capacity-optimized" if deployment_type == 'OnDemand' else self.configuration['cluster'].get('allocation_strategy', 'capacity-optimized'),
+                        **spot_instance_pools
                     )
                 ),
                 CreationPolicy=CreationPolicy(

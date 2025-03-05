@@ -57,6 +57,7 @@ class ServiceConfiguration(object):
             current_configuration = self.get_config(VERSION)
 
             current_configuration, _ = self._mask_config_keys(current_configuration, ["depends_on", "sidecars"])
+            # updated_configuration is None if editor is closed without saving anything
             updated_configuration = self.config_utils.fault_tolerant_edit_config(current_configuration=current_configuration, inject_version=True)
 
             if updated_configuration is None:
@@ -356,7 +357,7 @@ class ServiceConfiguration(object):
             "required": ["cloudlift_version", "services", "notifications_arn"]
         }
         try:
-            for _, service_configuration in configuration.get('services').items():
+            for _, service_configuration in configuration.get('services', {}).items():
                 for sidecar in service_configuration.get('sidecars', []):
                     if sidecar.get('name') == FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME and sidecar.get('log_driver') == 'awsfirelens':
                         raise UnrecoverableException("Set logging to 'awslogs' or 'null' for fluentbit firelens sidecar when using 'awsfirelens' for main container logging.")

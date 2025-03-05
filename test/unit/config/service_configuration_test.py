@@ -10,8 +10,8 @@ from cloudlift.config.environment_configuration import EnvironmentConfiguration
 from cloudlift.config.service_configuration import ServiceConfiguration
 from cloudlift.constants import FLUENTBIT_FIRELENS_SIDECAR_CONTAINER_NAME
 from cloudlift.exceptions import UnrecoverableException
+from cloudlift.utils import flatten_dict
 from cloudlift.version import VERSION
-from test.utils.helpers import flatten_dict
 
 SERVICE_NAME = "test-service"
 ENVIRONMENT_NAME = "test-environment"
@@ -21,7 +21,6 @@ SNS_TOPIC_ARN = f"arn:aws:sns:ap-south-1:123456789012:{SNS_TOPIC_NAME}"
 CPU_MIN_VALUE = 128
 CPU_MID_VALUE = 512
 CPU_MAX_VALUE = 4096
-
 
 @pytest.fixture
 def dummy_environment_config():
@@ -1449,6 +1448,7 @@ def test_inject_fluent_bit_sidecar_properties(
         "timeout": 2,
         "retries": 3,
     }
+<<<<<<< HEAD
 
 
 @pytest.mark.parametrize(
@@ -1567,3 +1567,5 @@ def test_service_name_validation(service_configuration, service_name, should_be_
         # Should raise UnrecoverableException
         with pytest.raises(UnrecoverableException):
             service_configuration._validate_changes(config)
+=======
+>>>>>>> 5b36da2 (feat(tests): add more tests)

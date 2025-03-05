@@ -35,7 +35,7 @@ def environment_config_table_mock(mock_aws, environment_config_table):
 
 
 def test_get_config_when_config_doesnt_exist(
-    mock_aws, environment_config_table_mock
+    mock_aws, environment_config_table_mock, fast_sleep
 ):
     """
     Tests that get_config raises an exception when the configuration doesn't exist.
@@ -167,38 +167,6 @@ def test_get_all_environments(mock_aws, environment_config_table_mock):
     assert "env2" in environments
 
 
-def test_edit_config_no_changes(
-    mock_aws, environment_config_table_mock, monkeypatch
-):
-    """
-    Tests that _edit_config does not update the configuration if no changes are made.
-    """
-    env_config = EnvironmentConfiguration(environment=ENVIRONMENT_NAME)
-    env_config.table = environment_config_table_mock
-
-    # Mock get_config to return a sample configuration
-    sample_config = {
-        "key_name": "test-key",
-        "cloudlift_version": CURRENT_CLOUDLIFT_VERSION,
-    }
-    monkeypatch.setattr(env_config, "get_config", lambda: sample_config.copy())
-
-    # Mock fault_tolerant_edit_config to return the same configuration (no changes)
-    monkeypatch.setattr(
-        env_config.config_utils,
-        "fault_tolerant_edit_config",
-        lambda current_configuration: sample_config.copy(),
-    )
-
-    # Mock _set_config to track calls
-    env_config._set_config = MagicMock()
-
-    env_config._edit_config()
-
-    # Ensure _set_config was called with the same configuration
-    env_config._set_config.assert_called_once_with(sample_config)
-
-
 def tet_env_config_exists(mock_aws, environment_config_table_mock):
     """
     Tests that _env_config_exists returns True if the configuration exists and False otherwise.
@@ -320,9 +288,7 @@ def test_create_config_prompts_for_values(monkeypatch, create_config_prompt_valu
     )
 
 
-def test_edit_config_with_changes(
-    mock_aws, environment_config_table_mock, monkeypatch
-):
+def test_edit_config_with_changes(mock_aws, environment_config_table_mock, monkeypatch):
     """
     Tests that _edit_config updates the configuration if changes are made.
     """
@@ -398,9 +364,7 @@ def test_edit_config_aborts_changes(
     env_config._set_config.assert_not_called()
 
 
-def test_edit_config_no_changes(
-    mock_aws, environment_config_table_mock, monkeypatch
-):
+def test_edit_config_no_changes(mock_aws, environment_config_table_mock, monkeypatch):
     """
     Tests that _edit_config does not update the configuration if no changes are made.
     """
@@ -579,9 +543,7 @@ def test_set_config_sns_topic_does_not_exist(
         env_config._set_config(valid_config)
 
 
-def test_update_cloudlift_version(
-    mock_aws, environment_config_table_mock, monkeypatch
-):
+def test_update_cloudlift_version(mock_aws, environment_config_table_mock, monkeypatch):
     """
     Tests that update_cloudlift_version updates the cloudlift version in the configuration.
     """
