@@ -1,32 +1,17 @@
-import datetime
-from stringcase import camelcase
 import json
-from unittest.mock import MagicMock
 
 import boto3
 import botocore.stub
 import pytest
-import yaml
-from botocore.client import ClientError
 from cfn_flip import to_json
-from troposphere import Export, GetAtt, Output, Parameter, Ref, Sub, Tags, Template
-from troposphere.ec2 import (
-    VPC,
-    InternetGateway,
-    NatGateway,
-    Route,
-    RouteTable,
-    SecurityGroup,
-    Subnet,
-    SubnetRouteTableAssociation,
-    VPCGatewayAttachment,
-)
+from stringcase import camelcase
+from troposphere import Parameter, Ref, Template
 from troposphere.ecs import Cluster
-from troposphere.elasticloadbalancingv2 import Listener as ALBListener
+from troposphere.ec2 import SecurityGroup
 from troposphere.elasticloadbalancingv2 import LoadBalancer as ALBLoadBalancer
 
 from cloudlift.deployment.cluster_template_generator import ClusterTemplateGenerator
-from cloudlift.exceptions import UnrecoverableException
+from cloudlift.utils import generate_pascalcase_name
 
 TEST_REGION = "ap-south-1"
 TEST_NOTIFICATIONS_ARN = f"arn:aws:sns:{TEST_REGION}:123456789012:test-notifications"
@@ -1564,3 +1549,416 @@ def cluster_type_config(request):
     Fixture for cluster type configuration based on the parametrized test cases.
     """
     return request.param
+
+
+def test_add_cluster_albs(cluster_template_generator, mock_aws):
+    """
+    Test that _add_cluster_albs creates ALBs and listeners with the correct configuration.
+    Verifies:
+    - One internal and one public ALB are created with proper scheme settings
+    - ALB security groups are created correctly
+    - HTTP and HTTPS listeners are created for each ALB
+    - HTTP listeners have appropriate default actions based on ALB scheme
+    - HTTPS listeners have the correct SSL policy and certificate
+    """
+    # Setup vpc and subnets required for ALB creation
+    cluster_template_generator._create_vpc("10.0.0.0/16")
+    cluster_template_generator._create_public_network({
+        "subnet-1": {"cidr": "10.0.1.0/24"},
+        "subnet-2": {"cidr": "10.0.2.0/24"},
+    })
+    cluster_template_generator._create_private_network({
+        "subnet-1": {"cidr": "10.0.3.0/24"},
+        "subnet-2": {"cidr": "10.0.4.0/24"},
+    }, "eipalloc-12345678")
+    
+    # Create security group for EC2 hosts that ALB security groups will reference
+    cluster_template_generator.sg_hosts = SecurityGroup(
+        "SecurityGroupEc2Hosts",
+        VpcId=Ref(cluster_template_generator.vpc),
+        GroupDescription="SecurityGroupEc2Hosts"
+    )
+    cluster_template_generator.template.add_resource(cluster_template_generator.sg_hosts)
+    
+    # Call the method under test
+    cluster_template_generator._add_cluster_albs()
+    
+    # Get the template resources
+    template_dict = cluster_template_generator.template.to_dict()
+    resources = template_dict["Resources"]
+    
+    # Verify ALBs were created
+    alb_resources = [r for r in resources.values() if r["Type"] == "AWS::ElasticLoadBalancingV2::LoadBalancer"]
+    assert len(alb_resources) == 2
+    
+    # Find internal and public ALBs
+    internal_alb = next((alb for alb in alb_resources if alb["Properties"]["Scheme"] == "internal"), None)
+    public_alb = next((alb for alb in alb_resources if alb["Properties"]["Scheme"] == "internet-facing"), None)
+    
+    assert internal_alb is not None, "Internal ALB was not created"
+    assert public_alb is not None, "Public ALB was not created"
+    
+    # Verify ALB security groups were created
+    security_groups = [r for r in resources.values() if r["Type"] == "AWS::EC2::SecurityGroup"]
+    assert len(security_groups) >= 3  # At least 2 ALB SGs + 1 host SG
+    
+    # Verify ALB security group ingress rules
+    sg_ingress_rules = [r for r in resources.values() if r["Type"] == "AWS::EC2::SecurityGroupIngress"]
+    assert len(sg_ingress_rules) >= 2  # At least 2 ingress rules from ALB to hosts
+    
+    # Verify listeners were created
+    listeners = [r for r in resources.values() if r["Type"] == "AWS::ElasticLoadBalancingV2::Listener"]
+    assert len(listeners) == 4  # 2 HTTP + 2 HTTPS listeners
+    
+    # Count HTTP and HTTPS listeners
+    http_listeners = [l for l in listeners if l["Properties"]["Protocol"] == "HTTP"]
+    https_listeners = [l for l in listeners if l["Properties"]["Protocol"] == "HTTPS"]
+    
+    assert len(http_listeners) == 2
+    assert len(https_listeners) == 2
+    
+    # Verify internal HTTP listener has a fixed response action
+    internal_http = next((l for l in http_listeners if 
+        l["Properties"]["LoadBalancerArn"]["Ref"] == internal_alb["Properties"]["Name"]), None)
+    assert internal_http is not None
+    assert internal_http["Properties"]["DefaultActions"][0]["Type"] == "fixed-response"
+    assert internal_http["Properties"]["DefaultActions"][0]["FixedResponseConfig"]["StatusCode"] == "404"
+    
+    # Verify public HTTP listener has a redirect action
+    public_http = next((l for l in http_listeners if 
+        l["Properties"]["LoadBalancerArn"]["Ref"] == public_alb["Properties"]["Name"]), None)
+    assert public_http is not None
+    assert public_http["Properties"]["DefaultActions"][0]["Type"] == "redirect"
+    assert public_http["Properties"]["DefaultActions"][0]["RedirectConfig"]["StatusCode"] == "HTTP_301"
+    
+    # Verify HTTPS listeners have correct SSL policy and certificate
+    for https in https_listeners:
+        assert https["Properties"]["SslPolicy"] == "ELBSecurityPolicy-FS-1-2-Res-2019-08"
+        assert https["Properties"]["Certificates"][0]["CertificateArn"] == TEST_ACM_ARN
+        assert https["Properties"]["DefaultActions"][0]["Type"] == "fixed-response"
+        assert https["Properties"]["DefaultActions"][0]["FixedResponseConfig"]["StatusCode"] == "404"
+    
+    # Verify outputs were created for ALBs and listeners
+    outputs = template_dict["Outputs"]
+    alb_outputs = [o for o in outputs.keys() if "ALB" in o]
+    listener_outputs = [o for o in outputs.keys() if "Listener" in o]
+    
+    assert len(alb_outputs) >= 2  # At least 2 ALB outputs
+    assert len(listener_outputs) >= 4  # At least 4 listener outputs
+
+@pytest.mark.parametrize("alb_scheme", [
+    "internal", 
+    "public"
+])
+def test_create_alb(cluster_template_generator, mock_aws, alb_scheme):
+    """
+    Test the _create_alb method with different ALB schemes.
+    Verifies:
+    - ALB is created with correct scheme
+    - Correct subnets are used based on scheme
+    - Security groups are properly configured
+    - Tags are set correctly
+    - Output is created for the ALB ARN
+    """
+    # Setup required resources
+    cluster_template_generator._create_vpc("10.0.0.0/16")
+    cluster_template_generator._create_public_network({
+        "subnet-1": {"cidr": "10.0.1.0/24"},
+        "subnet-2": {"cidr": "10.0.2.0/24"},
+    })
+    cluster_template_generator._create_private_network({
+        "subnet-1": {"cidr": "10.0.3.0/24"},
+        "subnet-2": {"cidr": "10.0.4.0/24"},
+    }, "eipalloc-12345678")
+    
+    # Create security group for EC2 hosts that ALB security groups will reference
+    cluster_template_generator.sg_hosts = SecurityGroup(
+        "SecurityGroupEc2Hosts",
+        VpcId=Ref(cluster_template_generator.vpc),
+        GroupDescription="SecurityGroupEc2Hosts"
+    )
+    cluster_template_generator.template.add_resource(cluster_template_generator.sg_hosts)
+    
+    # Call the method under test
+    alb = cluster_template_generator._create_alb(alb_scheme, 1)
+    
+    # Get the template resources
+    template_dict = cluster_template_generator.template.to_dict()
+    resources = template_dict["Resources"]
+    
+    # Find the ALB resource
+    alb_name = generate_pascalcase_name(f"{alb_scheme}_ALB_1_{TEST_ENV_NAME}")
+    assert alb_name in resources
+    
+    alb_resource = resources[alb_name]
+    assert alb_resource["Type"] == "AWS::ElasticLoadBalancingV2::LoadBalancer"
+    assert alb_resource["Properties"]["Name"] == alb_name
+    assert alb_resource["Properties"]["Type"] == "application"
+    assert alb_resource["Properties"]["Scheme"] == "internal" if alb_scheme == "internal" else "internet-facing"
+    
+    # Verify correct subnets are used based on scheme
+    if alb_scheme == "internal":
+        # For internal ALB, private subnets should be used
+        subnet_refs = [subnet_ref["Ref"] for subnet_ref in alb_resource["Properties"]["Subnets"]]
+        for subnet in cluster_template_generator.private_subnets:
+            assert subnet.title in subnet_refs
+    else:
+        # For public ALB, public subnets should be used
+        subnet_refs = [subnet_ref["Ref"] for subnet_ref in alb_resource["Properties"]["Subnets"]]
+        for subnet in cluster_template_generator.public_subnets:
+            assert subnet.title in subnet_refs
+    
+    # Verify security groups
+    sg_name = generate_pascalcase_name(f"SG_{alb_name}")
+    assert sg_name in resources
+    
+    # Verify ALB references the security group
+    assert resources[sg_name]["Type"] == "AWS::EC2::SecurityGroup"
+    assert alb_resource["Properties"]["SecurityGroups"][0]["Ref"] == sg_name
+    
+    # Verify tags
+    expected_tags = [
+        {"Key": "Name", "Value": alb_name},
+        {"Key": "environment", "Value": TEST_ENV_NAME},
+        {"Key": "Team", "Value": cluster_template_generator.team_name}
+    ]
+    for tag in expected_tags:
+        assert tag in alb_resource["Properties"]["Tags"]
+    
+    # Verify output was created
+    outputs = template_dict["Outputs"]
+    output_title = generate_pascalcase_name(f"{alb_scheme}_ALB_1_ARN")
+    assert output_title in outputs
+
+@pytest.mark.parametrize("alb_scheme", [
+    "internal", 
+    "public"
+])
+def test_create_security_group(cluster_template_generator, mock_aws, alb_scheme):
+    """
+    Test the _create_security_group method with different ALB schemes.
+    Verifies:
+    - Security group is created with proper name and description
+    - Ingress rules are added for HTTP and HTTPS traffic
+    - Egress rule allows all outbound traffic
+    - Ingress rule is created to allow traffic from ALB to EC2 hosts
+    - Output is created for the security group ID
+    """
+    # Setup required resources
+    cluster_template_generator._create_vpc("10.0.0.0/16")
+    
+    # Create security group for EC2 hosts that ALB security groups will reference
+    cluster_template_generator.sg_hosts = SecurityGroup(
+        "SecurityGroupEc2Hosts",
+        VpcId=Ref(cluster_template_generator.vpc),
+        GroupDescription="SecurityGroupEc2Hosts"
+    )
+    cluster_template_generator.template.add_resource(cluster_template_generator.sg_hosts)
+    
+    # Call the method under test
+    alb_name = generate_pascalcase_name(f"{alb_scheme}_ALB_1_{TEST_ENV_NAME}")
+    sg = cluster_template_generator._create_security_group(alb_name, alb_scheme, 1)
+    
+    # Get the template resources
+    template_dict = cluster_template_generator.template.to_dict()
+    resources = template_dict["Resources"]
+    
+    # Find the security group resource
+    sg_name = generate_pascalcase_name(f"SG_{alb_name}")
+    assert sg_name in resources
+    
+    sg_resource = resources[sg_name]
+    assert sg_resource["Type"] == "AWS::EC2::SecurityGroup"
+    assert sg_resource["Properties"]["GroupName"] == sg_name
+    assert f"Security group for {alb_name}" in sg_resource["Properties"]["GroupDescription"]
+    assert sg_resource["Properties"]["VpcId"]["Ref"] == cluster_template_generator.vpc.title
+    
+    # Verify ingress rules
+    ingress_rules = sg_resource["Properties"]["SecurityGroupIngress"]
+    assert len(ingress_rules) == 2  # HTTP and HTTPS
+    
+    http_rule = next((rule for rule in ingress_rules if rule["FromPort"] == "80"), None)
+    https_rule = next((rule for rule in ingress_rules if rule["FromPort"] == "443"), None)
+    
+    assert http_rule is not None
+    assert https_rule is not None
+    
+    for rule in [http_rule, https_rule]:
+        assert rule["IpProtocol"] == "tcp"
+        assert rule["CidrIp"] == "0.0.0.0/0"
+    
+    # Verify egress rule
+    egress_rules = sg_resource["Properties"]["SecurityGroupEgress"]
+    assert len(egress_rules) == 1
+    assert egress_rules[0]["IpProtocol"] == "-1"
+    assert egress_rules[0]["CidrIp"] == "0.0.0.0/0"
+    
+    # Verify ingress rule from ALB to EC2 hosts
+    ingress_rule_name = generate_pascalcase_name(f"{alb_name}_To_EC2Hosts_Ingress", 64)
+    assert ingress_rule_name in resources
+    
+    ingress_rule = resources[ingress_rule_name]
+    assert ingress_rule["Type"] == "AWS::EC2::SecurityGroupIngress"
+    assert ingress_rule["Properties"]["SourceSecurityGroupId"]["Ref"] == sg_name
+    assert ingress_rule["Properties"]["GroupId"]["Ref"] == "SecurityGroupEc2Hosts"
+    assert ingress_rule["Properties"]["IpProtocol"] == "-1"
+    
+    # Verify output was created
+    outputs = template_dict["Outputs"]
+    output_title = generate_pascalcase_name(f"SG_{alb_scheme}_1_ID")
+    assert output_title in outputs
+
+@pytest.mark.parametrize("alb_scheme", [
+    "internal", 
+    "public"
+])
+def test_create_alb_listeners(cluster_template_generator, mock_aws, alb_scheme):
+    """
+    Test the _create_alb_listeners method with different ALB schemes.
+    Verifies:
+    - HTTP and HTTPS listeners are created
+    - Internal ALB HTTP listener has fixed response action
+    - Public ALB HTTP listener has redirect action
+    - All HTTPS listeners have fixed response actions
+    - HTTPS listeners have correct SSL policy and certificate
+    - Outputs are created for the listener ARNs
+    """
+    # Setup required resources
+    cluster_template_generator._create_vpc("10.0.0.0/16")
+    
+    # Create ALB for listeners
+    alb_name = generate_pascalcase_name(f"{alb_scheme}_ALB_1_{TEST_ENV_NAME}")
+    alb = ALBLoadBalancer(
+        title=alb_name,
+        Name=alb_name,
+        Type="application",
+        Scheme="internal" if alb_scheme == "internal" else "internet-facing",
+        Subnets=["subnet-1", "subnet-2"],  # Dummy values
+        SecurityGroups=["sg-1"],  # Dummy value
+    )
+    cluster_template_generator.template.add_resource(alb)
+    
+    # Call the method under test
+    listeners = cluster_template_generator._create_alb_listeners(alb, alb_scheme, 1)
+    
+    # Get the template resources
+    template_dict = cluster_template_generator.template.to_dict()
+    resources = template_dict["Resources"]
+    
+    # Verify two listeners were created and returned
+    assert len(listeners) == 2
+    
+    # Find HTTP and HTTPS listeners
+    http_listener_name = f"Http{generate_pascalcase_name(f'Listener_{alb_scheme}_1_{TEST_ENV_NAME}')}"
+    https_listener_name = f"Https{generate_pascalcase_name(f'Listener_{alb_scheme}_1_{TEST_ENV_NAME}')}"
+    
+    assert http_listener_name in resources
+    assert https_listener_name in resources
+    
+    http_listener = resources[http_listener_name]
+    https_listener = resources[https_listener_name]
+    
+    # Verify common listener properties
+    for listener in [http_listener, https_listener]:
+        assert listener["Type"] == "AWS::ElasticLoadBalancingV2::Listener"
+        assert listener["Properties"]["LoadBalancerArn"]["Ref"] == alb_name
+    
+    # Verify HTTP listener ports and protocols
+    assert http_listener["Properties"]["Port"] == 80
+    assert http_listener["Properties"]["Protocol"] == "HTTP"
+    
+    # Verify HTTPS listener ports and protocols
+    assert https_listener["Properties"]["Port"] == 443
+    assert https_listener["Properties"]["Protocol"] == "HTTPS"
+    
+    # Verify HTTP listener default actions based on ALB scheme
+    if alb_scheme == "internal":
+        assert http_listener["Properties"]["DefaultActions"][0]["Type"] == "fixed-response"
+        assert http_listener["Properties"]["DefaultActions"][0]["FixedResponseConfig"]["StatusCode"] == "404"
+    else:
+        assert http_listener["Properties"]["DefaultActions"][0]["Type"] == "redirect"
+        assert http_listener["Properties"]["DefaultActions"][0]["RedirectConfig"]["StatusCode"] == "HTTP_301"
+        assert http_listener["Properties"]["DefaultActions"][0]["RedirectConfig"]["Protocol"] == "HTTPS"
+        assert http_listener["Properties"]["DefaultActions"][0]["RedirectConfig"]["Port"] == "443"
+    
+    # Verify HTTPS listener SSL configuration
+    assert https_listener["Properties"]["SslPolicy"] == "ELBSecurityPolicy-FS-1-2-Res-2019-08"
+    assert len(https_listener["Properties"]["Certificates"]) == 1
+    assert https_listener["Properties"]["Certificates"][0]["CertificateArn"] == TEST_ACM_ARN
+    
+    # Verify HTTPS listener default actions
+    assert https_listener["Properties"]["DefaultActions"][0]["Type"] == "fixed-response"
+    assert https_listener["Properties"]["DefaultActions"][0]["FixedResponseConfig"]["StatusCode"] == "404"
+    
+    # Verify outputs were created
+    outputs = template_dict["Outputs"]
+    http_output_title = generate_pascalcase_name(f"Listener_HTTP_{alb_scheme}_1_ARN")
+    https_output_title = generate_pascalcase_name(f"Listener_HTTPS_{alb_scheme}_1_ARN")
+    
+    assert http_output_title in outputs
+    assert https_output_title in outputs
+
+def test_fixed_response_action(cluster_template_generator):
+    """Test _create_fixed_response_action method creates correct action configuration"""
+    action = cluster_template_generator._create_fixed_response_action()
+    
+    assert action.__class__.__name__ == "Action"
+    assert action.Type == "fixed-response"
+    assert action.FixedResponseConfig.__class__.__name__ == "FixedResponseConfig"
+    assert action.FixedResponseConfig.ContentType == "text/plain"
+    assert action.FixedResponseConfig.StatusCode == "404"
+    assert action.FixedResponseConfig.MessageBody == "No matching host found"
+
+def test_redirect_action(cluster_template_generator):
+    """Test _create_redirect_action method creates correct action configuration"""
+    action = cluster_template_generator._create_redirect_action()
+    
+    assert action.__class__.__name__ == "Action"
+    assert action.Type == "redirect"
+    assert action.RedirectConfig.__class__.__name__ == "RedirectConfig"
+    assert action.RedirectConfig.StatusCode == "HTTP_301"
+    assert action.RedirectConfig.Protocol == "HTTPS"
+    assert action.RedirectConfig.Port == "443"
+
+def test_add_cluster_albs_with_ssl_certificate(cluster_template_generator, mock_aws):
+    """
+    Test _add_cluster_albs uses the correct SSL certificate from the environment.
+    """
+    # Setup vpc and subnets required for ALB creation
+    cluster_template_generator._create_vpc("10.0.0.0/16")
+    cluster_template_generator._create_public_network({
+        "subnet-1": {"cidr": "10.0.1.0/24"},
+        "subnet-2": {"cidr": "10.0.2.0/24"},
+    })
+    cluster_template_generator._create_private_network({
+        "subnet-1": {"cidr": "10.0.3.0/24"},
+        "subnet-2": {"cidr": "10.0.4.0/24"},
+    }, "eipalloc-12345678")
+    
+    # Create security group for EC2 hosts
+    cluster_template_generator.sg_hosts = SecurityGroup(
+        "SecurityGroupEc2Hosts",
+        VpcId=Ref(cluster_template_generator.vpc),
+        GroupDescription="SecurityGroupEc2Hosts"
+    )
+    cluster_template_generator.template.add_resource(cluster_template_generator.sg_hosts)
+    
+    # Call the method under test
+    cluster_template_generator._add_cluster_albs()
+    
+    # Get the template resources
+    template_dict = cluster_template_generator.template.to_dict()
+    resources = template_dict["Resources"]
+    
+    # Find all HTTPS listeners
+    https_listeners = [r for r in resources.values() if 
+                     r["Type"] == "AWS::ElasticLoadBalancingV2::Listener" and
+                     r["Properties"]["Protocol"] == "HTTPS"]
+                     
+    assert len(https_listeners) == 2
+    
+    # Verify all HTTPS listeners use the correct certificate
+    for listener in https_listeners:
+        certificates = listener["Properties"]["Certificates"]
+        assert len(certificates) == 1
+        assert certificates[0]["CertificateArn"] == TEST_ACM_ARN
