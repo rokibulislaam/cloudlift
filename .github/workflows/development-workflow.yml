@@ -11,6 +11,8 @@ on:
 jobs:
   run-unit-tests:
     name: Run Unit Tests
+    # Skip duplicate job runs in PR context - only run when it's a push in a PR
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     strategy:
       matrix:
