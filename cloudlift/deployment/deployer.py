@@ -119,8 +119,10 @@ def fetch_and_print_new_events(service, existing_events, color):
     all_events = fetch_events(service)
     new_events = [evnt for evnt in all_events if evnt not in existing_events]
     for event in new_events:
+        # Remove parentheses, strip leading/trailing spaces, and remove first 8 characters
+        message = event['message'].replace("(", "").replace(")", "")[8:].strip()
         log_with_color(
-            event['message'].replace("(", "").replace(")", "")[8:],
+            message,
             color
         )
     return all_events
