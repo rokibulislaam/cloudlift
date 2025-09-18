@@ -216,7 +216,6 @@ class EnvironmentConfiguration(object):
             if spot_allocation_strategy == 'lowest-price':
                 environment_configuration[self.environment]['vpc']['cluster']['spot_instance_pools'] = spot_instance_pools
         self._set_config(environment_configuration)
-        pass
 
     def _edit_config(self):
         '''

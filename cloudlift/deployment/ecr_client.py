@@ -1,7 +1,9 @@
 import base64
 import subprocess
+from shutil import which
 
 import boto3
+from botocore.exceptions import ClientError
 from cloudlift.exceptions import UnrecoverableException
 from stringcase import spinalcase
 
@@ -14,8 +16,7 @@ def get_container_tool() -> str:
     """
     Detect whether docker or podman is available. Use podman or fall back to docker
     """
-    from shutil import which
-    tool = which ('podman') or which('docker')
+    tool = which('podman') or which('docker')
     if tool is None:
         raise UnrecoverableException('Podman not installed')
     log_intent(f"Using {tool} as container tool")
@@ -53,8 +54,8 @@ class EcrClient:
                 },
             )
             log_intent('Repo created with name: ' + self.repo_name)
-        except Exception as ex:
-            if type(ex).__name__ == 'RepositoryAlreadyExistsException':
+        except ClientError as ex:
+            if 'RepositoryAlreadyExistsException' in str(ex):
                 log_intent('Repo exists with name: ' + self.repo_name)
             else:
                 raise ex
@@ -137,12 +138,28 @@ class EcrClient:
         log_intent(f'{self.container_tool_name} login to ECR succeeded.')
 
     def _find_commit_sha(self, version=None):
-        log_intent("Finding commit SHA")
+        log_intent("Finding git tag or commit SHA")
         try:
             version_to_find = version or "HEAD"
+            
+            # First check if the version is a git tag
+            try:
+                # Check if tag exists and get exact tag name (validates the tag)
+                tag_check = subprocess.check_output(
+                    ["git", "tag", "-l", version_to_find]
+                ).strip().decode("utf-8")
+                
+                if tag_check == version_to_find:
+                    log_intent(f"Found git tag {version_to_find}, using as version")
+                    return version_to_find
+            except:
+                pass
+                
+            # If not a tag or we're using HEAD, get the commit hash
             commit_sha = subprocess.check_output(
                 ["git", "rev-list", "-n", "1", version_to_find]
             ).strip().decode("utf-8")
+            
             log_intent("Found commit SHA " + commit_sha)
             return commit_sha
         except:
