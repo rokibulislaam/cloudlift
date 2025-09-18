@@ -1448,7 +1448,6 @@ def test_inject_fluent_bit_sidecar_properties(
         "timeout": 2,
         "retries": 3,
     }
-<<<<<<< HEAD
 
 
 @pytest.mark.parametrize(
@@ -1567,5 +1566,3 @@ def test_service_name_validation(service_configuration, service_name, should_be_
         # Should raise UnrecoverableException
         with pytest.raises(UnrecoverableException):
             service_configuration._validate_changes(config)
-=======
->>>>>>> 5b36da2 (feat(tests): add more tests)
